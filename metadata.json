@@ -1,6 +1,0 @@
-{
-  "name": "每日习惯打卡",
-  "description": "基于 Kotlin + Jetpack Compose 的每日习惯打卡与计划管理 Android 应用，支持大计划与子任务点击消除、独立日常计数器（自由记录生活物品/消费，支持上限或无上限）、周一首日月视图日历、计划小圆点状态标记、计划排期与多行描述、拍照留证及通知栏一键完成。",
-  "requestFramePermissions": ["camera"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 夜间模式启动图标底色，取自用户提供的夜间图标外圈背景 -->
+    <color name="ic_launcher_background">#051338</color>
+</resources>

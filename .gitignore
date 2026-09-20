@@ -18,3 +18,15 @@ captures/
 .cxx/
 *.iml
 .idea/
+
+# ===== 发布签名：绝不允许进仓库 =====
+# release.keystore      —— 私钥本体。泄露 = 别人能冒名发布你的 App。
+# keystore.properties   —— 里面是明文密码。
+# 两者一旦推上远端就应视为已泄露，必须换新密钥（代价是所有老用户卸载重装）。
+# 正常做法：离线备份两处（如密码管理器 + 移动硬盘），不要只放在这台电脑上。
+*.keystore
+*.jks
+keystore.properties
+
+# 图标抓取与对照生成的临时工作区（HabitIcons.kt 已自带全部路径数据，可随时重建）
+.iconwork/

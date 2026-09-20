@@ -3,7 +3,8 @@
     <color name="primary">#10B981</color>
     <color name="primary_variant">#059669</color>
     <color name="background">#FAFAFA</color>
-    <!-- 自适应启动图标底色（minSdk 29 >= 26，只需 mipmap-anydpi-v26 变体） -->
-    <color name="ic_launcher_background">#10B981</color>
+    <!-- 自适应启动图标底色（minSdk 29 >= 26，只需 mipmap-anydpi-v26 变体）
+         日间白色对应日间图标背景；夜间模式由 values-night/colors.xml 覆盖为 #051338 -->
+    <color name="ic_launcher_background">#FFFFFF</color>
     <color name="ic_launcher_foreground">#FFFFFF</color>
 </resources>
