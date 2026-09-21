@@ -33,10 +33,3 @@ data class UpcomingHabit(
     val date: LocalDate
 )
 
-data class DayProgress(
-    val date: String,
-    val totalHabitsCount: Int,
-    val completedCount: Int,
-    val ratio: Float, // 0.0f to 1.0f
-    val checkIns: List<CheckIn> = emptyList()
-)

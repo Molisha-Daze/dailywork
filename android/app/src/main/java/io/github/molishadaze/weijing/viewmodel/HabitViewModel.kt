@@ -15,7 +15,6 @@ import io.github.molishadaze.weijing.data.entity.CounterPeriodLog
 import io.github.molishadaze.weijing.data.entity.Habit
 import io.github.molishadaze.weijing.data.entity.StandaloneCounter
 import io.github.molishadaze.weijing.data.repository.HabitRepository
-import io.github.molishadaze.weijing.model.DayProgress
 import io.github.molishadaze.weijing.model.HabitWithStats
 import io.github.molishadaze.weijing.model.UpcomingHabit
 import io.github.molishadaze.weijing.util.AppSettings
@@ -86,13 +85,6 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
         )
 
     val allCheckIns: StateFlow<List<CheckIn>> = repository.allCheckIns
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-
-    val heatMapProgress: StateFlow<List<DayProgress>> = repository.getHeatMapProgress(35)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

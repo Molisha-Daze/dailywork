@@ -8,7 +8,6 @@ import io.github.molishadaze.weijing.data.entity.CheckIn
 import io.github.molishadaze.weijing.data.entity.CounterPeriodLog
 import io.github.molishadaze.weijing.data.entity.Habit
 import io.github.molishadaze.weijing.data.entity.StandaloneCounter
-import io.github.molishadaze.weijing.model.DayProgress
 import io.github.molishadaze.weijing.model.HabitWithStats
 import io.github.molishadaze.weijing.notification.NotificationHelper
 import io.github.molishadaze.weijing.util.AppSettings
@@ -106,39 +105,6 @@ class HabitRepository(private val context: Context) {
                 totalSubTaskCount = subTasks.size,
                 completedSubTaskCount = completedSubTaskIds.size,
                 hasSubTasks = subTasks.isNotEmpty()
-            )
-        }
-    }
-
-    /**
-     * 计算最近若干天的完成率，用于日历热力图。
-     * 分母是**当天有排期的习惯数**而不是全部活跃习惯数，
-     * 否则「每周一三五」这类习惯会把没排期的日子全部拉低成未完成。
-     */
-    fun getHeatMapProgress(daysCount: Int = 35): Flow<List<DayProgress>> = combine(
-        habitDao.getAllActiveHabits(),
-        checkInDao.getAllCheckIns()
-    ) { habits, allCheckIns ->
-        val dates = DateUtils.getRecentDates(daysCount)
-        val checkInsByDate = allCheckIns.groupBy { it.date }
-
-        dates.map { date ->
-            val dayCheckIns = checkInsByDate[date] ?: emptyList()
-            val checkInByHabit = dayCheckIns.associateBy { it.habitId }
-
-            val scheduled = habits.filter { HabitSchedule.isScheduled(it, date) }
-            val completedCount = scheduled.count { habit ->
-                HabitSchedule.isCompleted(habit, checkInByHabit[habit.id])
-            }
-            val total = scheduled.size
-            val ratio = if (total > 0) (completedCount.toFloat() / total).coerceIn(0f, 1f) else 0f
-
-            DayProgress(
-                date = date,
-                totalHabitsCount = total,
-                completedCount = completedCount,
-                ratio = ratio,
-                checkIns = dayCheckIns
             )
         }
     }

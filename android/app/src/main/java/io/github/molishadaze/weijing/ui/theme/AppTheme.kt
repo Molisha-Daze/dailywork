@@ -43,11 +43,11 @@ data class ThemePalette(
 /**
  * 转 Material3 的 [ColorScheme]。
  *
- * 走 light/dark 两个前缀是为了让「本文件没有显式指定的槽」按正确的明暗基调兜底；
- * 二者接收的参数完全一致，剩下的只是选哪个构造函数的问题。
+ * 先取 `darkColorScheme()` / `lightColorScheme()` 的默认值打底，再 `copy` 覆盖本文件显式指定的槽 ——
+ * 这样剩下的未被指定的槽会按正确的明暗基调兜底，而 26 个参数只需要写一遍。
  */
-fun ThemePalette.toColorScheme(): ColorScheme = if (isDark) {
-    darkColorScheme(
+fun ThemePalette.toColorScheme(): ColorScheme =
+    (if (isDark) darkColorScheme() else lightColorScheme()).copy(
         primary = primary, onPrimary = onPrimary,
         primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
         secondary = secondary, onSecondary = onSecondary,
@@ -62,23 +62,6 @@ fun ThemePalette.toColorScheme(): ColorScheme = if (isDark) {
         error = error, onError = onError,
         errorContainer = errorContainer, onErrorContainer = onErrorContainer
     )
-} else {
-    lightColorScheme(
-        primary = primary, onPrimary = onPrimary,
-        primaryContainer = primaryContainer, onPrimaryContainer = onPrimaryContainer,
-        secondary = secondary, onSecondary = onSecondary,
-        secondaryContainer = secondaryContainer, onSecondaryContainer = onSecondaryContainer,
-        tertiary = tertiary, onTertiary = onTertiary,
-        tertiaryContainer = tertiaryContainer, onTertiaryContainer = onTertiaryContainer,
-        background = background, onBackground = onBackground,
-        surface = surface, onSurface = onSurface,
-        surfaceVariant = surfaceVariant, onSurfaceVariant = onSurfaceVariant,
-        outline = outline, outlineVariant = outlineVariant,
-        scrim = scrim,
-        error = error, onError = onError,
-        errorContainer = errorContainer, onErrorContainer = onErrorContainer
-    )
-}
 
 // ---------------------------------------------------------------------------
 // 六套主题配色

@@ -22,11 +22,4 @@ object DateUtils {
     fun formatDate(date: LocalDate): String {
         return date.format(DATE_FORMATTER)
     }
-
-    fun getRecentDates(count: Int): List<String> {
-        val today = todayDate()
-        return (0 until count).map { offset ->
-            today.minusDays((count - 1 - offset).toLong()).format(DATE_FORMATTER)
-        }
-    }
 }

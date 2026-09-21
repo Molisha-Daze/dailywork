@@ -11,7 +11,7 @@
 - **拍照与相册凭证**: 采用 Android 官方最新标准 `ActivityResultContracts.PickVisualMedia`（Photo Picker），向下兼容至 Android 10，无需申请危险的 `READ_EXTERNAL_STORAGE` 权限。
 - **照片持久化保护**: 从 Photo Picker 获取的临时 Uri 流式复制存储至 App 私有存储目录（`getExternalFilesDir` / `filesDir`），保证手机重启与沙盒生命周期内文件永久有效。
 - **本地定时提醒**: 使用 `AlarmManager.setExactAndAllowWhileIdle` 精确定时；注册 `BOOT_COMPLETED` 广播接收器在开机后自动重新排期所有提醒；通知渠道配置完整，Android 13+ 运行时动态请求 `POST_NOTIFICATIONS` 权限，通知附带一键打卡 Action。
-- **历史热力图与流**: 35 天日历热力图（依每日完成度比例呈现深浅梯度）+ 倒序打卡流水列表，支持点击缩略图全屏查看大图凭证。
+- **历史回顾**: 月历视图查看任意一天的排期与完成情况，下方为倒序打卡流水列表，支持点击缩略图全屏查看大图凭证。
 - **每日格言**: 今日页「头部信息卡」下方的一句话，**优先联网**取自公开语录接口，**无网络时回退**内置的 64 条格言库（`data/DailyQuotes.kt`，先秦典籍 / 诗词 / 近现代与外国）；每天最多请求一次，取回的结果按天缓存，当天不再变。详见下节。
 
 ## 每日格言与网络边界
