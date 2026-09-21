@@ -60,7 +60,6 @@ import io.github.molishadaze.weijing.util.Haptics
 import java.io.File
 
 /** 与网页版 emerald-500 一致的完成态色。 */
-private val DONE_GREEN = Color(0xFF10B981)
 
 @Composable
 fun HabitCard(
@@ -96,18 +95,23 @@ fun HabitCard(
         MaterialTheme.colorScheme.primary
     }
 
-    // 网页版完成态是统一的 emerald 浅底 + emerald 描边，不跟随习惯自定义色，
-    // 这样「已完成」才有一种一眼可辨的统一视觉语言。
+    // 完成态走「主题主色」而不是某一支固定绿。
     //
+    // 原来是写死的 #10B981，而它同时是主题主色、也是习惯色板的第一支 —— 于是
+    // 「这张卡已完成」和「这个习惯恰好是翡翠绿」长得一模一样，换主题后还会撞色。
+    // 现在完成态 = 当前主题主色，而所有主题的主色都是低饱和中性色，
+    // 与习惯 / 计数器那批高饱和彩色天然拉得开（ΔE > 30，见 AppThemeTest）。
+    val doneTint = MaterialTheme.colorScheme.primary
+
     // ⚠️ 底色必须是「合成后不透明」的。网页版 bg-emerald-500/5 在 CSS 里半透明没问题，
     // 但 Compose 里 Card 带 elevation 时，Material3 Surface 是先
     // graphicsLayer(shadowElevation, clip = false) 再背景，阴影会从半透明背景里透出来，
     // 沿着卡片四边糊出一圈发暗的「黑框」——就是完成瞬间出现的那一圈。
-    // compositeOver 把 5% 的绿压到不透明的 surface 上，观感与网页版一致，且不再漏阴影。
+    // compositeOver 把 5% 的主色压到不透明的 surface 上，观感与网页版一致，且不再漏阴影。
     val surfaceColor = MaterialTheme.colorScheme.surface
     val animatedBg by animateColorAsState(
         targetValue = if (isCompleted) {
-            DONE_GREEN.copy(alpha = 0.05f).compositeOver(surfaceColor)
+            doneTint.copy(alpha = 0.05f).compositeOver(surfaceColor)
         } else {
             surfaceColor
         },
@@ -119,11 +123,11 @@ fun HabitCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = animatedBg),
         border = if (isCompleted) {
-            // 对齐网页版的 border-emerald-500/30：1dp、30% emerald。
+            // 1dp、30% 主色。
             // 显式构造，别走 CardDefaults.outlinedCardBorder()——它取的是
             // colorScheme.outlineVariant，而本主题只覆盖了 outline，
             // outlineVariant 会落到 Material3 默认值（深色主题下是深灰），颜色不受控。
-            BorderStroke(1.dp, DONE_GREEN.copy(alpha = 0.3f))
+            BorderStroke(1.dp, doneTint.copy(alpha = 0.3f))
         } else null,
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -170,26 +174,37 @@ fun HabitCard(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = UiIcons.LocalFireDepartment,
-                            contentDescription = "连续打卡",
-                            tint = Color(0xFFF97316),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
+                    // 单次计划（TYPE_NONE）没有「连续 / 最长」可言：它全生命周期只有一天排期，
+                    // 一旦完成必然算出 连续1天 / 最长1天 —— 对纯提醒性质的日程是纯噪音。
+                    // 这里换成一句说明性文案，火苗图标一并去掉（它是连续打卡的语义符号）。
+                    if (habit.recurrenceType == HabitSchedule.TYPE_NONE) {
                         Text(
-                            text = "连续 ${item.currentStreak} 天",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFEA580C)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "最长 ${item.longestStreak} 天",
+                            text = "单次任务，点完消失~",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = UiIcons.LocalFireDepartment,
+                                contentDescription = "连续打卡",
+                                tint = Color(0xFFF97316),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "连续 ${item.currentStreak} 天",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFEA580C)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "最长 ${item.longestStreak} 天",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
                     // 非每日习惯要说明排期，否则用户会奇怪「它怎么有时不出现」
@@ -263,14 +278,14 @@ fun HabitCard(
                                 text = "$count/$target",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isCompleted) DONE_GREEN else MaterialTheme.colorScheme.onSurface,
+                                color = if (isCompleted) doneTint else MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(horizontal = 6.dp)
                             )
 
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(DONE_GREEN)
+                                    .background(doneTint)
                                     .clickable {
                                         // count 是点击前的快照。只有「这一点刚好把它顶到目标」才值得强振；
                                         // 已经达标后再点（4/3）不给强振，否则「达标」这个信号会被稀释成每一下都一样。
@@ -287,14 +302,16 @@ fun HabitCard(
                                     Icon(
                                         Icons.Default.Add,
                                         contentDescription = "加一次",
-                                        tint = Color.White,
+                                        // 底是主题主色，字色必须走 onPrimary：
+                                        // 夜间主题的主色是浅灰白，硬编码白色会直接看不见。
+                                        tint = MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = "+1",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
                             }
@@ -487,6 +504,9 @@ private fun SubTaskSection(
     val completedCount = completedIds.size
     val total = subTasks.size
     val progress = if (total > 0) completedCount.toFloat() / total else 0f
+    // 与卡片完成态同一支色（主题主色），不用习惯自己的 tint，
+    // 否则「已完成」三个字会和习惯色混在一起分不出层级。
+    val doneTint = MaterialTheme.colorScheme.primary
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -574,7 +594,7 @@ private fun SubTaskSection(
                         text = if (done) "已完成" else "待完成",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = if (done) DONE_GREEN else MaterialTheme.colorScheme.outline
+                        color = if (done) doneTint else MaterialTheme.colorScheme.outline
                     )
                 }
             }
@@ -582,7 +602,8 @@ private fun SubTaskSection(
     }
 }
 
-private val WEEKDAY_CN = mapOf(1 to "一", 2 to "二", 3 to "三", 4 to "四", 5 to "五", 6 to "六", 7 to "日")
+// internal 而不是 private：今日页的「即将到来」也要把 LocalDate 翻成「周三」这类中文星期。
+internal val WEEKDAY_CN = mapOf(1 to "一", 2 to "二", 3 to "三", 4 to "四", 5 to "五", 6 to "六", 7 to "日")
 
 fun scheduleLabel(habit: Habit): String = when (habit.recurrenceType) {
     HabitSchedule.TYPE_NONE -> if (habit.startDate.isBlank()) "单次" else "仅 ${habit.startDate}"

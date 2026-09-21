@@ -39,6 +39,12 @@ object StreakCalculator {
         referenceToday: LocalDate = DateUtils.todayDate(),
         historyWindowDays: Long = DEFAULT_HISTORY_WINDOW_DAYS
     ): StreakResult {
+        // 单次计划（TYPE_NONE）在语义上根本没有「连续」这个概念 —— 它全生命周期只有一天排期，
+        // 完成即 1/1、未完成即 0/0，无论怎么算都毫无信息量。
+        // 在这里直接归零，而不是让每个调用方（卡片、未来的统计页）各自特判：
+        // 口径只此一份，UI 就不必再关心「这个 1 到底是不是真的连续一天」。
+        if (habit.recurrenceType == HabitSchedule.TYPE_NONE) return StreakResult(0, 0)
+
         if (checkInsByDate.isEmpty()) return StreakResult(0, 0)
 
         val earliestCheckIn = checkInsByDate.keys

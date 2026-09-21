@@ -12,6 +12,15 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- 联网：**只**用于「每日格言」在联网时去公开语录接口取一条句子。
+         边界写在这里，改代码时请守住：
+         - 请求是单向 GET，不携带任何用户数据，不上传打卡记录 / 照片 / 备份；
+         - 无网络或请求失败时静默回退到内置格言库（data/DailyQuotes.kt），功能不受影响；
+         - 不声明 ACCESS_NETWORK_STATE：不预判网络，直接发请求、失败即降级 ——
+           Android 无网时 UnknownHostException 是立刻抛出的，不需要先探测，
+           少一个权限就少一份解释成本。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".HabitApplication"
         android:allowBackup="true"

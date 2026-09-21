@@ -49,6 +49,41 @@ object HabitSchedule {
         intervalDays = habit.intervalDays.coerceAtLeast(1)
     )
 
+    /**
+     * 「即将到来」向前看多少天。
+     *
+     * 取 60 而不是 30：每月 31 日的习惯在 2 月会一路跳到 3 月 31 日（约 58 天），
+     * 窗口只有 30 的话这类计划会被漏掉，看起来像「排了却没有」。
+     */
+    const val UPCOMING_WINDOW_DAYS = 60
+
+    /**
+     * 从 [after] 之后（不含当天）起，在 [windowDays] 天内找该习惯**下一次**的排期日期；
+     * 窗口内都没有就返回 null（例如单次计划已过期、习惯已结束、或每周某天但没选任何天）。
+     *
+     * ⚠️ 刻意只找**一次**，不是把窗口内所有命中日期都列出来：
+     * 循环习惯（每天 / 每周一三五 / 每月 15 号）在 60 天里会命中十几次到几十次，
+     * 全列出来等于把「未来两个月」糊到今日页上。今日页要回答的是「下一个是什么时候」，
+     * 所以每个习惯至多贡献一条 —— 这正是「循环日程只显示一个」的落点。
+     *
+     * 逐日匹配而不是反解公式：排期判定只有 [ScheduleMatcher.matches] 一份实现，
+     * 另写一套「下次出现日」的闭式解就会有两份逻辑，改一处漏一处。
+     * 开销可控（习惯数 × 60 次布尔判断），StreakCalculator 回溯几千年也是这么走的。
+     */
+    fun nextScheduledDate(
+        habit: Habit,
+        after: LocalDate,
+        windowDays: Int = UPCOMING_WINDOW_DAYS
+    ): LocalDate? {
+        if (windowDays <= 0) return null
+        val matcher = of(habit)
+        for (offset in 1..windowDays) {
+            val date = after.plusDays(offset.toLong())
+            if (matcher.matches(date)) return date
+        }
+        return null
+    }
+
     /** 计数器目标次数，至少为 1。 */
     fun effectiveTarget(habit: Habit): Int = habit.targetCount.coerceAtLeast(1)
 

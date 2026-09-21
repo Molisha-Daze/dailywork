@@ -5,6 +5,10 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.github.molishadaze.weijing.data.DailyQuote
+import io.github.molishadaze.weijing.data.DailyQuotes
+import io.github.molishadaze.weijing.data.QuotePolicy
+import io.github.molishadaze.weijing.data.RemoteQuoteSource
 import io.github.molishadaze.weijing.data.dao.CheckInWithHabit
 import io.github.molishadaze.weijing.data.entity.CheckIn
 import io.github.molishadaze.weijing.data.entity.CounterPeriodLog
@@ -13,9 +17,13 @@ import io.github.molishadaze.weijing.data.entity.StandaloneCounter
 import io.github.molishadaze.weijing.data.repository.HabitRepository
 import io.github.molishadaze.weijing.model.DayProgress
 import io.github.molishadaze.weijing.model.HabitWithStats
+import io.github.molishadaze.weijing.model.UpcomingHabit
 import io.github.molishadaze.weijing.util.AppSettings
 import io.github.molishadaze.weijing.util.DateUtils
+import io.github.molishadaze.weijing.util.HabitSchedule
 import io.github.molishadaze.weijing.util.ImageStorageManager
+import java.time.LocalDate
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -35,6 +43,35 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
     /** 今天真正有排期的习惯，供「今日打卡」页使用。 */
     val todayHabits: StateFlow<List<HabitWithStats>> = repository.habitsWithStats
         .map { list -> list.filter { it.scheduledToday } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    /**
+     * 「即将到来」：今天没排期、但未来 60 天内会出现的习惯，每个习惯只取**下一个**日期。
+     *
+     * 用途是给今日页兜底 —— 今天恰好没有排期时，整页只剩一个空状态会让人以为
+     * 「我的计划都没了」，而实际上下周还有一堆。
+     *
+     * 只在 [todayHabits] 为空时才被 UI 读；这里不做条件过滤，因为两个 Flow 的发射
+     * 时机不同步，条件放在 UI 侧（同一个 Compose 快照里判断）才不会闪。
+     */
+    val upcomingHabits: StateFlow<List<UpcomingHabit>> = repository.habitsWithStats
+        .map { list ->
+            // 每次发射都重新取今天，别在 VM 构造时缓存：跨过零点后列表得自己更新。
+            val today = DateUtils.todayDate()
+            list.asSequence()
+                .filter { !it.scheduledToday }
+                .mapNotNull { item ->
+                    HabitSchedule.nextScheduledDate(item.habit, today)
+                        ?.let { date -> UpcomingHabit(habit = item.habit, date = date) }
+                }
+                // 先按日期近的排，同一天再按习惯本身的顺序（id 即创建顺序）
+                .sortedWith(compareBy<UpcomingHabit> { it.date }.thenBy { it.habit.id })
+                .toList()
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -248,6 +285,56 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
     fun toggleSubTaskGroup(habitId: Long, date: String = DateUtils.today()) {
         viewModelScope.launch {
             repository.toggleSubTaskGroup(habitId, date)
+        }
+    }
+
+    // ---------- 每日格言 ----------
+
+    /**
+     * 今天要显示的格言。
+     *
+     * 初值直接取内置库当天的句子 —— **首帧必须立刻有内容**：远程接口实测首包要 4 秒，
+     * 等它回来再渲染，等于让用户对着一个空洞的占位符发呆。
+     */
+    private val _todayQuote = MutableStateFlow(DailyQuotes.forDate(DateUtils.todayDate()))
+    val todayQuote: StateFlow<DailyQuote> = _todayQuote
+
+    /**
+     * 本次进程内已经尝试过远程请求的日期。
+     *
+     * 没有它的话，每次切回「今日打卡」tab 都会重发一次请求：当天有缓存时还好（命中缓存直接返回），
+     * 但「当天没网」这种情形会变成来回切几次就白试几次。一张内存标记就能省掉，且进程重启后自动重置，
+     * 用户第二天连上网仍有重新尝试的机会。
+     */
+    private var quoteFetchAttemptedOn: LocalDate? = null
+
+    /**
+     * 取今天的格言：**在线优先、缓存兜底、本地保底**。
+     *
+     * 可以重复调用，代价最多是每天一次请求：
+     * 1. 当天已缓存远程句子 → 直接用它并返回，**不发请求**。这一步同时保证同一天里
+     *    句子不会来回变 —— 接口是「随机漫步」，每调一次换一句，不做缓存就不叫「每日格言」了；
+     * 2. 没有缓存 → 异步取一次，取到且通过 [QuotePolicy] 内容校验才落盘并刷新界面；
+     * 3. 无网 / 超时 / 被过滤 / 接口挂了 → **什么都不做**，保持内置库当天的句子，用户无感知。
+     *
+     * 缓存在 [settings]（SharedPreferences）里，所以冷启动的第一帧就能命中，不用等网络。
+     */
+    fun refreshTodayQuote(settings: AppSettings) {
+        val today = DateUtils.todayDate()
+
+        settings.cachedRemoteQuote(today)?.let { cached ->
+            _todayQuote.value = DailyQuote(cached.text, cached.source)
+            return
+        }
+
+        if (quoteFetchAttemptedOn == today) return
+        quoteFetchAttemptedOn = today
+
+        viewModelScope.launch {
+            val remote = RemoteQuoteSource.fetch() ?: return@launch
+            val quote = QuotePolicy.toDailyQuote(remote) ?: return@launch
+            settings.saveRemoteQuote(today, quote.text, quote.source)
+            _todayQuote.value = quote
         }
     }
 }

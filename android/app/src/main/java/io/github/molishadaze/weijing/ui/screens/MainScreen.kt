@@ -47,6 +47,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import io.github.molishadaze.weijing.ui.components.UiIcons
 import io.github.molishadaze.weijing.ui.components.notificationSettingsIntent
+import io.github.molishadaze.weijing.ui.theme.AppTheme
 import io.github.molishadaze.weijing.util.AppSettings
 import io.github.molishadaze.weijing.viewmodel.HabitViewModel
 
@@ -71,6 +72,8 @@ fun MainScreen(viewModel: HabitViewModel, settings: AppSettings) {
     // 字号偏好。变更会即时反映到这里，进而更新「管理中心」里RadioButton的选中态；
     // 真正作用到排版是在 MainActivity 的 LocalDensity 里。
     val fontScale by settings.fontScale.collectAsState(initial = AppSettings.DEFAULT_FONT_SCALE)
+    val themeId by settings.themeId.collectAsState(initial = AppSettings.DEFAULT_THEME_ID)
+    val appTheme = AppTheme.of(themeId)
 
     // Android 13+ (API 33+) Runtime Notification Permission Request。
     // 回调结果必须被消费：被拒绝时要明确告诉用户去哪里开，而不是静默失效。
@@ -197,13 +200,14 @@ fun MainScreen(viewModel: HabitViewModel, settings: AppSettings) {
 
             Box(modifier = Modifier.fillMaxSize()) {
                 when (selectedTabIndex) {
-                    0 -> TodayScreen(viewModel = viewModel)
+                    0 -> TodayScreen(viewModel = viewModel, settings = settings)
                     1 -> CalendarScreen(viewModel = viewModel)
                     2 -> StandaloneCountersScreen(viewModel = viewModel)
                     3 -> SettingsScreen(
                         viewModel = viewModel,
                         settings = settings,
-                        currentFontScale = fontScale
+                        currentFontScale = fontScale,
+                        currentTheme = appTheme
                     )
                 }
             }

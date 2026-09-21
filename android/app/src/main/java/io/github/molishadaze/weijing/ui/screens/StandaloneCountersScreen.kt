@@ -32,7 +32,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -172,7 +171,8 @@ fun StandaloneCountersScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF10B981))
+                                // 主行动按钮跟随主题主色，理由同今日页 FAB
+                                .background(MaterialTheme.colorScheme.primary)
                                 .clickable {
                                     editingCounter = null
                                     showEditor = true
@@ -183,7 +183,8 @@ fun StandaloneCountersScreen(
                                 Icon(
                                     Icons.Default.Add,
                                     contentDescription = null,
-                                    tint = Color.White,
+                                    // 底是主题主色，字色走 onPrimary（夜间主题主色是浅色，白字会看不见）
+                                    tint = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -191,7 +192,7 @@ fun StandaloneCountersScreen(
                                     text = "新建计数器",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
                         }
@@ -307,13 +308,17 @@ private fun CounterCard(
     val periodBadge = CounterPeriodCalculator.badgeText(
         counter.resetPeriod, counter.resetIntervalDays, periodAnchor, today
     )
+    val showPeriod = periodBadge != null && currentPeriod != null
 
+    // 卡片分两种密度：
+    // - 有上限：进度条、剩余量、周期徽章都是真信息，值得占高度；
+    // - 无上限：上面除标题外没有元信息，再照搬一套留白就是纯浪费（下面几处按此分流）。
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(if (hasLimit) 16.dp else 14.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -343,34 +348,33 @@ private fun CounterCard(
                     }
                 }
 
+                // 三个操作统一走 40dp 的自绘盒，而不是「一个自绘 + 两个 IconButton」：
+                // 1) IconButton 自带 48dp 最小触控区，比自绘盒高 8dp，会把标题行整体顶高；
+                // 2) 它的图标是 24dp，自绘盒是 18dp，一排三个按钮肉眼可见一大一小；
+                // 3) 横向也省下 16dp，标题能多显示几个字。
+                // 清零按钮同时支持短按确认与长按直接执行 —— 刻意不用 IconButton，
+                // 它自带的 clickable 会与外层 combinedClickable 抢手势，导致长按/短按有一个失效。
                 Row {
-                    // 清零按钮同时支持短按确认与长按直接执行。
-                    // 这里刻意不用 IconButton：它自带的 clickable 会与外层 combinedClickable
-                    // 抢手势，导致长按/短按其中一个失效。直接自己画可点击区域最可控。
                     IconActionBox(
                         imageVector = UiIcons.RestartAlt,
                         contentDescription = "清零，长按可直接清零",
                         onClick = onResetClick,
                         onLongClick = onResetLongClick
                     )
-                    IconButton(onClick = onEdit) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "编辑",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "删除",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    IconActionBox(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "编辑",
+                        onClick = onEdit
+                    )
+                    IconActionBox(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "删除",
+                        onClick = onDelete
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(if (hasLimit) 10.dp else 8.dp))
 
             if (hasLimit) {
                 Row(
@@ -411,17 +415,16 @@ private fun CounterCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            } else {
-                Text(
-                    text = "无上限自由计数",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
+            // 无上限时刻意不写「无上限自由计数」这一行：
+            // 没有进度条、没有「上限 / 剩余」本身就是「不限量」的信号，
+            // 再补一句纯说明文字，等于拿整整一行的高度去重复同一件事。
 
             // 周期徽章：只对配了自动归零的计数器显示。
             // 「今天 / 本周 / 本月 / 第 2/3 天」——用户一眼就能确认
             // 眼前这个数字算的是哪一段时间，不必去翻设置。
+            // 这里仍写成显式的双判空而不是复用 showPeriod：只有这样编译器才能把
+            // periodBadge / currentPeriod 智能转换成非空，省掉一串 !!。
             if (periodBadge != null && currentPeriod != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -447,69 +450,21 @@ private fun CounterCard(
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(
-                        text = counter.currentCount.toString(),
-                        style = MaterialTheme.typography.displaySmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            color = themeColor
-                        )
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = counter.unit,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 13.sp
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = {
-                            Haptics.play(Haptics.Level.LIGHT)
-                            onStep(-counter.step)
-                        },
-                        enabled = counter.currentCount > 0,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        modifier = Modifier.size(44.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(UiIcons.Remove, contentDescription = "减 ${counter.step}")
-                    }
-                    Button(
-                        onClick = {
-                            // 「刚好喝空最后一罐」才给强振。已经到上限后继续点不再强振，
-                            // 否则「喝完了」这个信号会被后续每一次点击淹没。
-                            val justHitLimit = hasLimit &&
-                                counter.currentCount < limit &&
-                                counter.currentCount + counter.step >= limit
-                            Haptics.play(
-                                if (justHitLimit) Haptics.Level.STRONG else Haptics.Level.LIGHT
-                            )
-                            onStep(counter.step)
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = themeColor),
-                        modifier = Modifier.height(44.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+${counter.step}", fontWeight = FontWeight.SemiBold)
-                    }
-                }
+            // 分隔线是给「上方确实有元信息」的情况划界的。无上限又不归零的卡片，
+            // 标题下面直接就是数值，再画一条横线只会把「数值 + 加减」往下推。
+            if (hasLimit || showPeriod) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            } else {
+                Spacer(modifier = Modifier.height(10.dp))
             }
+
+            CounterValueRow(
+                counter = counter,
+                themeColor = themeColor,
+                hasLimit = hasLimit,
+                limit = limit,
+                onStep = onStep
+            )
 
             // 历史入口。默认收起 —— 卡片首屏要留给「现在是多少」，
             // 历史是"想回顾时才展开"的次要信息。
@@ -521,6 +476,83 @@ private fun CounterCard(
                     expanded = historyExpanded,
                     onToggle = { historyExpanded = !historyExpanded }
                 )
+            }
+        }
+    }
+}
+
+/**
+ * 卡片的「数值 + 增减」主操作行。
+ *
+ * 抽成独立组件是因为有上限 / 无上限两种密度现在共用一个实现 ——
+ * 各写一份的话，改一处力度、间距就会漏掉另一处，卡片立刻长得不一样。
+ */
+@Composable
+private fun CounterValueRow(
+    counter: StandaloneCounter,
+    themeColor: Color,
+    hasLimit: Boolean,
+    limit: Int,
+    onStep: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = counter.currentCount.toString(),
+                style = MaterialTheme.typography.displaySmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    color = themeColor
+                )
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = counter.unit,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 13.sp
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = {
+                    Haptics.play(Haptics.Level.LIGHT)
+                    onStep(-counter.step)
+                },
+                enabled = counter.currentCount > 0,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
+                modifier = Modifier.size(44.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Icon(UiIcons.Remove, contentDescription = "减 ${counter.step}")
+            }
+            Button(
+                onClick = {
+                    // 「刚好喝空最后一罐」才给强振。已经到上限后继续点不再强振，
+                    // 否则「喝完了」这个信号会被后续每一次点击淹没。
+                    val justHitLimit = hasLimit &&
+                        counter.currentCount < limit &&
+                        counter.currentCount + counter.step >= limit
+                    Haptics.play(
+                        if (justHitLimit) Haptics.Level.STRONG else Haptics.Level.LIGHT
+                    )
+                    onStep(counter.step)
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = themeColor),
+                modifier = Modifier.height(44.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("+${counter.step}", fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -633,13 +665,19 @@ private fun IconActionBox(
     imageVector: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier
             .size(40.dp)
             .clip(RoundedCornerShape(10.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
+            )
             .semantics { this.contentDescription = contentDescription },
         contentAlignment = Alignment.Center
     ) {

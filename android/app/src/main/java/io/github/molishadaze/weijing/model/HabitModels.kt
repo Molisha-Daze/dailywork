@@ -2,6 +2,7 @@ package io.github.molishadaze.weijing.model
 
 import io.github.molishadaze.weijing.data.entity.CheckIn
 import io.github.molishadaze.weijing.data.entity.Habit
+import java.time.LocalDate
 
 data class HabitWithStats(
     val habit: Habit,
@@ -19,6 +20,17 @@ data class HabitWithStats(
     val completedSubTaskCount: Int = 0,
     /** 是否是大计划（有可勾选的子任务）。UI 据此决定要不要渲染勾选列表。 */
     val hasSubTasks: Boolean = false
+)
+
+/**
+ * 一条「即将到来」的日程：某习惯在 [date] 会第一次出现。
+ *
+ * 每个习惯在列表里只会出现一次（取它下一次的日期），
+ * 所以循环习惯不会把未来几十次排期全铺开。
+ */
+data class UpcomingHabit(
+    val habit: Habit,
+    val date: LocalDate
 )
 
 data class DayProgress(

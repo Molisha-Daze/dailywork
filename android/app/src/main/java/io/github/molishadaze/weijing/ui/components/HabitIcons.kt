@@ -54,6 +54,7 @@ object UiIcons {
     val Alarm: ImageVector by lazy { icon("Alarm", "m22 5.72-4.6-3.86-1.29 1.53 4.6 3.86L22 5.72zM7.88 3.39 6.6 1.86 2 5.71l1.29 1.53 4.59-3.85zM12.5 8H11v6l4.75 2.85.75-1.23-4-2.37V8zM12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9a9 9 0 0 0 0-18zm0 16c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" to false) }
     val Download: ImageVector by lazy { icon("Download", "M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z" to false) }
     val Tune: ImageVector by lazy { icon("Tune", "M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z" to false) }
+    val Palette: ImageVector by lazy { icon("Palette", "M12 2C6.49 2 2 6.49 2 12s4.49 10 10 10a2.5 2.5 0 0 0 2.5-2.5c0-.61-.23-1.2-.64-1.67a.528.528 0 0 1-.13-.33c0-.28.22-.5.5-.5H16c3.31 0 6-2.69 6-6 0-4.96-4.49-9-10-9zm5.5 11c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm-3-4c-.83 0-1.5-.67-1.5-1.5S13.67 6 14.5 6s1.5.67 1.5 1.5S15.33 9 14.5 9zM5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S7.33 13 6.5 13 5 12.33 5 11.5zm6-4c0 .83-.67 1.5-1.5 1.5S8 8.33 8 7.5 8.67 6 9.5 6s1.5.67 1.5 1.5z" to false) }
     val Vibration: ImageVector by lazy { icon("Vibration", "M0 15h2V9H0v6zm3 2h2V7H3v10zm19-8v6h2V9h-2zm-3 8h2V7h-2v10zM16.5 3h-9C6.67 3 6 3.67 6 4.5v15c0 .83.67 1.5 1.5 1.5h9c.83 0 1.5-.67 1.5-1.5v-15c0-.83-.67-1.5-1.5-1.5zM16 19H8V5h8v14z" to false) }
     val CalendarMonth: ImageVector by lazy { icon("CalendarMonth", "M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8 4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2z" to false) }
     val ArrowDownward: ImageVector by lazy { icon("ArrowDownward", "m20 12-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z" to false) }
@@ -71,7 +72,10 @@ object UiIcons {
     val RestartAlt: ImageVector by lazy { icon("RestartAlt", "M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6 0 2.97-2.17 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93 0-4.42-3.58-8-8-8zm-6 8c0-1.65.67-3.15 1.76-4.24L6.34 7.34A8.014 8.014 0 0 0 4 13c0 4.08 3.05 7.44 7 7.93v-2.02c-2.83-.48-5-2.94-5-5.91z" to false) }
 }
 
-/** 习惯可选图标。key 与网页版 `PRESET_ICONS`、数据库 `Habit.iconName` 三方对齐，改动需同步。 */
+/**
+ * 习惯图标池。key 即数据库 `Habit.iconName` 的取值，由 [getIconVector] 解析；
+ * [PRESET_ICONS] 是它的「可选子集」。增删图标时这三处要一起看。
+ */
 object HabitIcons {
     val DirectionsRun: ImageVector by lazy { icon("DirectionsRun", "M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9 1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z" to false) }
     val Book: ImageVector by lazy { icon("Book", "M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z" to false) }
@@ -86,7 +90,6 @@ object HabitIcons {
     val Savings: ImageVector by lazy { icon("Savings", "m19.83 7.5-2.27-2.27c.07-.42.18-.81.32-1.15A1.498 1.498 0 0 0 16.5 2c-1.64 0-3.09.79-4 2h-5C4.46 4 2 6.46 2 9.5S4.5 21 4.5 21H10v-2h2v2h5.5l1.68-5.59 2.82-.94V7.5h-2.17zM13 9H8V7h5v2zm3 2c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z" to false) }
     val MusicNote: ImageVector by lazy { icon("MusicNote", "M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" to false) }
     val DirectionsWalk: ImageVector by lazy { icon("DirectionsWalk", "M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9 7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7" to false) }
-    val Pets: ImageVector by lazy { icon("Pets", "M17.34 14.86c-.87-1.02-1.6-1.89-2.48-2.91-.46-.54-1.05-1.08-1.75-1.32-.11-.04-.22-.07-.33-.09-.25-.04-.52-.04-.78-.04s-.53 0-.79.05c-.11.02-.22.05-.33.09-.7.24-1.28.78-1.75 1.32-.87 1.02-1.6 1.89-2.48 2.91-1.31 1.31-2.92 2.76-2.62 4.79.29 1.02 1.02 2.03 2.33 2.32.73.15 3.06-.44 5.54-.44h.18c2.48 0 4.81.58 5.54.44 1.31-.29 2.04-1.31 2.33-2.32.31-2.04-1.3-3.49-2.61-4.8z" to false) }
     val WbSunny: ImageVector by lazy { icon("WbSunny", "m6.76 4.84-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7 1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91 1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z" to false) }
     val Star: ImageVector by lazy { icon("Star", "M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" to false) }
 }
@@ -106,12 +109,19 @@ fun getIconVector(iconName: String): ImageVector = when (iconName) {
     "Money" -> HabitIcons.Savings
     "Music" -> HabitIcons.MusicNote
     "Walk" -> HabitIcons.DirectionsWalk
-    "Pet" -> HabitIcons.Pets
     "Sun" -> HabitIcons.WbSunny
     else -> HabitIcons.Star
 }
 
-/** 新建/编辑习惯时的图标候选。顺序即界面网格顺序。 */
+/**
+ * 新建/编辑习惯时的图标候选。顺序即界面网格顺序。
+ *
+ * key 与 [getIconVector] 的解析分支一一对应，删除图标时**三处一起删**：
+ * 这里的候选行、[HabitIcons] 里的矢量定义、`getIconVector` 的 when 分支
+ * （外加 `HabitIconsTest` 里那份显式 key 清单）。
+ * 只删一半会出现「有候选却画不出图形」或「解析得到不存在的 key」。
+ * 「爪印 Pet」就是按这个流程整体移除的（2026-09-21）。
+ */
 val PRESET_ICONS: List<Pair<String, ImageVector>> = listOf(
     "Run" to HabitIcons.DirectionsRun,
     "Book" to HabitIcons.Book,
@@ -126,7 +136,6 @@ val PRESET_ICONS: List<Pair<String, ImageVector>> = listOf(
     "Money" to HabitIcons.Savings,
     "Music" to HabitIcons.MusicNote,
     "Walk" to HabitIcons.DirectionsWalk,
-    "Pet" to HabitIcons.Pets,
     "Sun" to HabitIcons.WbSunny,
     "Star" to HabitIcons.Star,
 )

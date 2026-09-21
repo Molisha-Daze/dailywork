@@ -9,8 +9,10 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,12 +20,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
@@ -46,6 +51,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +62,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import io.github.molishadaze.weijing.ui.components.UiIcons
+import io.github.molishadaze.weijing.ui.theme.AppTheme
 import io.github.molishadaze.weijing.util.AppSettings
 import io.github.molishadaze.weijing.util.Haptics
 import io.github.molishadaze.weijing.viewmodel.HabitViewModel
@@ -71,6 +79,7 @@ fun SettingsScreen(
     viewModel: HabitViewModel,
     settings: AppSettings,
     currentFontScale: Float,
+    currentTheme: AppTheme,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -121,6 +130,7 @@ fun SettingsScreen(
         item {
             ManagementPanelGrid(
                 currentFontScale = currentFontScale,
+                currentTheme = currentTheme,
                 versionName = appVersionName(context),
                 onOpen = { activePanel = it }
             )
@@ -136,9 +146,11 @@ fun SettingsScreen(
     }
 
     when (activePanel) {
-        Panel.FONT_SIZE -> FontSizeDialog(
+        Panel.VISUAL -> VisualEffectsDialog(
             currentFontScale = currentFontScale,
-            onSelect = { settings.setFontScale(it) },
+            currentTheme = currentTheme,
+            onSelectFontScale = { settings.setFontScale(it) },
+            onSelectTheme = { settings.setThemeId(it.id) },
             onDismiss = { activePanel = null }
         )
         Panel.ABOUT -> AboutDialog(
@@ -172,13 +184,14 @@ fun SettingsScreen(
 }
 
 private enum class Panel {
-    FONT_SIZE, ABOUT, BACKUP, NOTIFICATION
+    VISUAL, ABOUT, BACKUP, NOTIFICATION
 }
 
 /** 1x4 金刚区：与管理中心网页版一一对应的四个入口。 */
 @Composable
 private fun ManagementPanelGrid(
     currentFontScale: Float,
+    currentTheme: AppTheme,
     versionName: String,
     onOpen: (Panel) -> Unit
 ) {
@@ -196,11 +209,13 @@ private fun ManagementPanelGrid(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             GridEntry(
-                icon = UiIcons.Tune,
-                label = "设置字号",
-                value = currentSize.label,
-                tint = Color(0xFF10B981),
-                onClick = { onOpen(Panel.FONT_SIZE) }
+                icon = UiIcons.Palette,
+                label = "视觉效果",
+                value = currentTheme.label,
+                // 金刚区其余三项用的是功能色；这一项的色刻意取自「宣纸」主题的主色，
+                // 与计划 / 计数器的自定义色板不冲突（ΔE 54.7）。
+                tint = Color(0xFF6E5E4B),
+                onClick = { onOpen(Panel.VISUAL) }
             )
             GridEntry(
                 icon = Icons.Default.Info,
@@ -361,18 +376,40 @@ private fun GridEntry(
     }
 }
 
+/**
+ * 视觉效果：字号 + 整体主题配色。
+ *
+ * 两块并入同一个弹窗而不是各占一个金刚区入口 —— 金刚区是 1x4、与网页版一一对应的
+ * 固定四位，多一个就会让两端导航结构错位。
+ */
 @Composable
-private fun FontSizeDialog(
+private fun VisualEffectsDialog(
     currentFontScale: Float,
-    onSelect: (Float) -> Unit,
+    currentTheme: AppTheme,
+    onSelectFontScale: (Float) -> Unit,
+    onSelectTheme: (AppTheme) -> Unit,
     onDismiss: () -> Unit
 ) {
     val currentSize = AppSettings.sizeOf(currentFontScale)
+    // 弹窗内容必须给一个明确的高度上限，否则主题卡片一多就会把对话框撑出屏幕。
+    val maxContentHeight = LocalConfiguration.current.screenHeightDp.dp * 0.6f
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("设置字号") },
+        title = { Text("视觉效果") },
         text = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxContentHeight)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "界面字号",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
                 AppSettings.FontSize.entries.forEach { size ->
                     Row(
                         modifier = Modifier
@@ -382,7 +419,7 @@ private fun FontSizeDialog(
                     ) {
                         RadioButton(
                             selected = currentSize == size,
-                            onClick = { onSelect(size.scale) }
+                            onClick = { onSelectFontScale(size.scale) }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
@@ -397,10 +434,128 @@ private fun FontSizeDialog(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(18.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "主题配色",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "主色刻意与计划 / 计数器的自定义色拉开距离，避免分不清「完成态」和「某个计划自己的颜色」",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                AppTheme.pickList.chunked(2).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        row.forEach { theme ->
+                            ThemeCard(
+                                theme = theme,
+                                selected = theme == currentTheme,
+                                modifier = Modifier.weight(1f),
+                                onClick = { onSelectTheme(theme) }
+                            )
+                        }
+                        // 奇数个时补一个占位，保证同一行的卡片等宽
+                        if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("完成") } }
     )
+}
+
+/**
+ * 一张主题卡片：用该主题自己的三色画一个迷你预览。
+ *
+ * 预览色直接取自主题而非当前主题，这样在深色模式下也能看出每个候选长什么样 ——
+ * 否则「宣纸」在夜间主题里预览出来会是一张深色卡片，等于没预览。
+ */
+@Composable
+private fun ThemeCard(
+    theme: AppTheme,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val palette = if (theme.forceDark == true) theme.darkPalette else theme.lightPalette
+    val shape = RoundedCornerShape(14.dp)
+
+    Column(
+        modifier = modifier
+            .clip(shape)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                shape = shape
+            )
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surface
+            )
+            .clickable(onClick = onClick)
+            .padding(10.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(palette.background)
+                .padding(6.dp)
+        ) {
+            // 卡片底 + 一条「文字」+ 主色圆点，三色足够说明这套配色的气质
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(palette.surface)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 6.dp)
+                    .size(width = 26.dp, height = 5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(palette.onSurface.copy(alpha = 0.5f))
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(palette.primary)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = theme.label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = theme.subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable

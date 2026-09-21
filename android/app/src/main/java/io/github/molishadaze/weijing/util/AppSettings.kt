@@ -2,12 +2,24 @@ package io.github.molishadaze.weijing.util
 
 import android.content.Context
 import android.content.SharedPreferences
+import java.time.LocalDate
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
 /**
- * 应用级偏好设置（目前只有界面字号）。
+ * 当天从远程语录接口取回的格言。
+ *
+ * 刻意不带日期字段：它是「某一天的那条」，日期由调用方比对，
+ * 存进来时就已经和某一天绑定，取出来时只关心「是不是今天」。
+ *
+ * 放在 util 包而不是 data 包，是为了避免 util → data 的反向依赖
+ * （data 层的 HabitRepository 已经依赖本类，反过来再依赖会形成包循环）。
+ */
+data class CachedQuote(val text: String, val source: String)
+
+/**
+ * 应用级偏好设置（界面字号、整体主题、触觉反馈、示例播种标记）。
  *
  * 用 SharedPreferences + Listener 转 Flow，而不是数据库：
  * 字号属于设备本地的显示偏好，不属于用户数据，**不应该进备份文件**，
@@ -73,6 +85,62 @@ class AppSettings(context: Context) {
         prefs.edit().putBoolean(KEY_SAMPLE_SEEDED, true).apply()
     }
 
+    /**
+     * 界面主题 id（取值见 ui.theme.AppTheme）。
+     *
+     * 这里只存字符串、不去引用 AppTheme：本类在 util 层，让它反向依赖 ui 包
+     * 会把「偏好存储」和「界面呈现」的分层搅乱；由调用方拿着 id 去查枚举。
+     * 同样属于本地显示偏好，**不进备份文件**。
+     */
+    val themeId: Flow<String> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_THEME) {
+                trySend(currentThemeId())
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(currentThemeId())
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    /**
+     * 同步读取主题 id。
+     *
+     * 必须提供同步形态：主题要在 setContent 的第一帧之前决定，
+     * 等 Flow 发射完再生效会闪一下旧主题。
+     */
+    fun currentThemeId(): String = prefs.getString(KEY_THEME, DEFAULT_THEME_ID) ?: DEFAULT_THEME_ID
+
+    fun setThemeId(id: String) {
+        prefs.edit().putString(KEY_THEME, id).apply()
+    }
+
+    /**
+     * 读取「今天那条远程格言」。
+     *
+     * 只有缓存的日期正好等于 [today] 才返回，否则一律返回 null —— 这一步是
+     * 「每日格言」语义的关键：跨天后旧句子立刻失效，界面会退回内置库当天的句子，
+     * 直到拿到新的远程句子为止。
+     *
+     * 同样是本地派生数据，**不进备份文件**：它只是一句可以重新拉取的句子，
+     * 恢复备份时没必要把它带到另一台设备上去。
+     */
+    fun cachedRemoteQuote(today: LocalDate): CachedQuote? {
+        if (prefs.getString(KEY_QUOTE_DATE, null) != today.toString()) return null
+        val text = prefs.getString(KEY_QUOTE_TEXT, null)?.takeIf { it.isNotBlank() } ?: return null
+        val source = prefs.getString(KEY_QUOTE_SOURCE, null) ?: return null
+        return CachedQuote(text, source)
+    }
+
+    /** 记下今天拉到的远程格言。三个字段必须同时写，缺一个都会让 [cachedRemoteQuote] 判为无效。 */
+    fun saveRemoteQuote(today: LocalDate, text: String, source: String) {
+        prefs.edit()
+            .putString(KEY_QUOTE_DATE, today.toString())
+            .putString(KEY_QUOTE_TEXT, text)
+            .putString(KEY_QUOTE_SOURCE, source)
+            .apply()
+    }
+
     enum class FontSize(val label: String, val scale: Float, val percent: String) {
         SMALL("小号", 0.875f, "87.5%"),
         NORMAL("标准", 1.0f, "100%"),
@@ -90,8 +158,21 @@ class AppSettings(context: Context) {
 
         private const val KEY_FONT_SCALE = "font_scale"
         private const val KEY_SAMPLE_SEEDED = "sample_seeded"
+        private const val KEY_THEME = "theme_id"
+
+        // 「今天那条远程格言」的三件套。日期存 ISO 字符串（yyyy-MM-dd），
+        // 与 LocalDate.toString() 严格一致，比较时不做任何解析。
+        private const val KEY_QUOTE_DATE = "quote_date"
+        private const val KEY_QUOTE_TEXT = "quote_text"
+        private const val KEY_QUOTE_SOURCE = "quote_source"
         const val DEFAULT_FONT_SCALE = 1.0f
         const val DEFAULT_HAPTIC_ENABLED = true
+
+        /**
+         * 默认跟随系统。取值必须与 AppTheme.AUTO.id 一致 ——
+         * 两边一旦不符，新用户装上就会落到未知 id；AppThemeTest 守着这条。
+         */
+        const val DEFAULT_THEME_ID = "auto"
 
         /** 从当前缩放值反查对应的档位，找不到（例如旧数据 0.9）则归为标准。 */
         fun sizeOf(scale: Float): FontSize =

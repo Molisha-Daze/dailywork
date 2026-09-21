@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -54,14 +55,39 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
-private val CAL_EMERALD = Color(0xFF10B981)
 private val CAL_AMBER = Color(0xFFF59E0B)
 private val CAL_PURPLE = Color(0xFF8B5CF6)
 
 /**
+ * 「完成 / 选中」的强调色，取当前主题主色。
+ *
+ * 原来是写死的翡翠绿 #10B981，而它同时是计划色板的第一支 —— 于是「今天全部完成」的
+ * 实心绿点和「某个计划恰好选了翡翠绿」看起来一模一样。改成跟随主题后，
+ * 这层语义永远落在低饱和中性色上，与用户自选的高饱和彩色天然拉得开（见 AppThemeTest）。
+ */
+@Composable
+private fun calAccent(): Color = MaterialTheme.colorScheme.primary
+
+/**
+ * 清单头部的日期简称：当年只写「9月25日」，跨年才补上年份。
+ *
+ * 原来这里直接塞 ISO 的 "2026-09-25"，再拼上「计划清单」共 16 个字。
+ * 首页标题行是 `Row { Text标题; 胶囊"N 项" }` 且 Text 没有任何宽度约束，
+ * 于是超长的标题会先吃掉整行宽度，把同一 Row 里的「N 项」胶囊压到 0 宽 ——
+ * 这就是「点未来日期时右侧那三个控件像被吃掉」的真正原因。
+ * 换成中文短日期后长度减半，跨年场景仍保留年份，不会丢信息。
+ */
+private fun shortDateLabel(date: LocalDate, today: LocalDate): String =
+    if (date.year == today.year) {
+        "${date.monthValue}月${date.dayOfMonth}日"
+    } else {
+        "${date.year}年${date.monthValue}月${date.dayOfMonth}日"
+    }
+
+/**
  * 月视图日历 + 当天计划清单（与网页版 CalendarMonthView.tsx 一一对齐）：
  *
- * 1. 周一为每周第一天，周日表头用琥珀色
+ * 1. 周一为每周第一天，周六 / 周日表头统一用琥珀色
  * 2. 月份可自由前后翻（**包括未来月份**）——不能翻到未来就无法「提前安排某天的日程」
  * 3. 日期格：选中=emerald 描边+浅底，今天=浅灰底，非本月=半透明；下方状态点
  *    （全完成=实心绿点，有未完成=空心灰点）
@@ -130,8 +156,8 @@ fun CalendarMonthView(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(50))
-                                    .background(CAL_EMERALD.copy(alpha = 0.12f))
-                                    .border(1.dp, CAL_EMERALD.copy(alpha = 0.4f), RoundedCornerShape(50))
+                                    .background(calAccent().copy(alpha = 0.12f))
+                                    .border(1.dp, calAccent().copy(alpha = 0.4f), RoundedCornerShape(50))
                                     .clickable {
                                         currentMonth = YearMonth.from(today)
                                         selectedDate = today
@@ -142,7 +168,7 @@ fun CalendarMonthView(
                                     text = "今日",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = CAL_EMERALD
+                                    color = calAccent()
                                 )
                             }
                         }
@@ -183,8 +209,10 @@ fun CalendarMonthView(
                             textAlign = TextAlign.Center,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            // 网页版把周日表头标成琥珀色
-                            color = if (index == 6) CAL_AMBER.copy(alpha = 0.8f)
+                            // 周末（周六 / 周日）表头统一用琥珀色区分工作日。
+                            // 原实现只给周日上色，周六仍是普通灰 —— 同为休息日却两种视觉，
+                            // 看起来像「周日有特殊含义」而不是「周末」。
+                            color = if (index >= 5) CAL_AMBER.copy(alpha = 0.8f)
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -227,14 +255,14 @@ fun CalendarMonthView(
                                         .clip(RoundedCornerShape(14.dp))
                                         .then(
                                             if (isSelected) {
-                                                Modifier.border(2.dp, CAL_EMERALD, RoundedCornerShape(14.dp))
+                                                Modifier.border(2.dp, calAccent(), RoundedCornerShape(14.dp))
                                             } else {
                                                 Modifier
                                             }
                                         )
                                         .background(
                                             when {
-                                                isSelected -> CAL_EMERALD.copy(alpha = 0.12f)
+                                                isSelected -> calAccent().copy(alpha = 0.12f)
                                                 isToday -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                                                 else -> Color.Transparent
                                             }
@@ -257,7 +285,7 @@ fun CalendarMonthView(
                                             lineHeight = 12.sp,
                                             fontWeight = if (isToday || isSelected) FontWeight.ExtraBold else FontWeight.Bold,
                                             color = when {
-                                                isToday -> CAL_EMERALD
+                                                isToday -> calAccent()
                                                 isSelected -> MaterialTheme.colorScheme.onSurface
                                                 else -> MaterialTheme.colorScheme.onSurface
                                             }
@@ -268,10 +296,10 @@ fun CalendarMonthView(
                                                 modifier = Modifier
                                                     .size(6.dp)
                                                     .clip(CircleShape)
-                                                    .background(if (isAllCompleted) CAL_EMERALD else Color.Transparent)
+                                                    .background(if (isAllCompleted) calAccent() else Color.Transparent)
                                                     .border(
                                                         width = 1.5.dp,
-                                                        color = if (isAllCompleted) CAL_EMERALD
+                                                        color = if (isAllCompleted) calAccent()
                                                         else Color(0xFF9CA3AF),
                                                         shape = CircleShape
                                                     )
@@ -315,13 +343,13 @@ fun CalendarMonthView(
                             text = "进入当天详情",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = CAL_EMERALD
+                            color = calAccent()
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Icon(
                             UiIcons.OpenInNew,
                             contentDescription = null,
-                            tint = CAL_EMERALD,
+                            tint = calAccent(),
                             modifier = Modifier.size(12.dp)
                         )
                     }
@@ -348,10 +376,17 @@ fun CalendarMonthView(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = if (isSelectedToday) "今日计划清单" else "$selectedDateStr 计划清单",
+                                text = if (isSelectedToday) "今日计划清单"
+                                else "${shortDateLabel(effectiveSelectedDate, today)} 计划清单",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                // fill = false：标题只按内容占宽，不抢整行剩余空间。
+                                // 双保险 —— 即使将来日期文案又变长，也只会自己打省略号，
+                                // 不会再把右边的「N 项」胶囊挤没。
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Box(
@@ -374,7 +409,7 @@ fun CalendarMonthView(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(CAL_EMERALD.copy(alpha = 0.12f))
+                            .background(calAccent().copy(alpha = 0.12f))
                             .clickable { onCreateForDate(selectedDateStr) }
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
@@ -382,7 +417,7 @@ fun CalendarMonthView(
                             Icon(
                                 Icons.Default.Add,
                                 contentDescription = null,
-                                tint = CAL_EMERALD,
+                                tint = calAccent(),
                                 modifier = Modifier.size(14.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
@@ -390,7 +425,7 @@ fun CalendarMonthView(
                                 text = "新建",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = CAL_EMERALD
+                                color = calAccent()
                             )
                         }
                     }
@@ -465,7 +500,7 @@ private fun LegendDot(filled: Boolean, label: String) {
             modifier = Modifier
                 .size(7.dp)
                 .clip(CircleShape)
-                .background(if (filled) CAL_EMERALD else Color.Transparent)
+                .background(if (filled) calAccent() else Color.Transparent)
                 .then(
                     if (filled) Modifier
                     else Modifier.border(1.5.dp, Color(0xFF9CA3AF), CircleShape)
@@ -493,7 +528,7 @@ private fun CalendarDayPlanRow(
     onDecrement: () -> Unit,
     onToggleSubTask: (String) -> Unit
 ) {
-    val habitColor = parseColorSafe(habit.colorHex, CAL_EMERALD)
+    val habitColor = parseColorSafe(habit.colorHex, calAccent())
     val isDone = HabitSchedule.isCompleted(habit, checkIn)
     val count = HabitSchedule.currentCount(checkIn)
     val target = HabitSchedule.effectiveTarget(habit)
@@ -505,11 +540,11 @@ private fun CalendarDayPlanRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(
-                if (isDone) CAL_EMERALD.copy(alpha = 0.06f)
+                if (isDone) calAccent().copy(alpha = 0.06f)
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
             )
             .then(
-                if (isDone) Modifier.border(1.dp, CAL_EMERALD.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                if (isDone) Modifier.border(1.dp, calAccent().copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                 else Modifier
             )
             .padding(10.dp)
@@ -533,7 +568,7 @@ private fun CalendarDayPlanRow(
                 Icon(
                     imageVector = if (isDone) Icons.Outlined.CheckCircle else UiIcons.RadioButtonUnchecked,
                     contentDescription = if (isDone) "取消完成" else "标记完成",
-                    tint = if (isDone) CAL_EMERALD else MaterialTheme.colorScheme.outline,
+                    tint = if (isDone) calAccent() else MaterialTheme.colorScheme.outline,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -616,13 +651,13 @@ private fun CalendarDayPlanRow(
                         text = "$count/$target ${habit.unit}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isDone) CAL_EMERALD else MaterialTheme.colorScheme.onSurface,
+                        color = if (isDone) calAccent() else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 6.dp)
                     )
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(7.dp))
-                            .background(CAL_EMERALD)
+                            .background(calAccent())
                             .clickable {
                                 val justReachedTarget = count < target && count + 1 >= target
                                 Haptics.play(
@@ -712,11 +747,11 @@ private fun CalendarDayPlanRow(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
-                                    if (done) CAL_EMERALD.copy(alpha = 0.10f)
+                                    if (done) calAccent().copy(alpha = 0.10f)
                                     else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
                                 )
                                 .then(
-                                    if (done) Modifier.border(1.dp, CAL_EMERALD.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                                    if (done) Modifier.border(1.dp, calAccent().copy(alpha = 0.3f), RoundedCornerShape(10.dp))
                                     else Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
                                 )
                                 .clickable {
@@ -736,7 +771,7 @@ private fun CalendarDayPlanRow(
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(if (done) CAL_EMERALD else Color.Transparent)
+                                    .background(if (done) calAccent() else Color.Transparent)
                                     .then(
                                         if (done) Modifier
                                         else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
@@ -766,7 +801,7 @@ private fun CalendarDayPlanRow(
                                 text = if (done) "完成" else "点此完成",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (done) CAL_EMERALD else MaterialTheme.colorScheme.outline
+                                color = if (done) calAccent() else MaterialTheme.colorScheme.outline
                             )
                         }
                     }

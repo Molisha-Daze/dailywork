@@ -42,6 +42,12 @@ class StreakCalculatorTest {
         startDate = start
     )
 
+    private fun oneShot(date: String) = Habit(
+        name = "h",
+        recurrenceType = HabitSchedule.TYPE_NONE,
+        startDate = date
+    )
+
     /** 报告用例 1：每周一三五，连续完成周一和周三 → 周三应显示 2，而不是 1 */
     @Test
     fun weeklyMonWedFri_countsScheduledOccurrencesNotNaturalDays() {
@@ -219,5 +225,44 @@ class StreakCalculatorTest {
             referenceToday = LocalDate.of(2026, 9, 18)
         )
         assertEquals(1, result.currentStreak)
+    }
+
+    /**
+     * 单次计划不产生任何连续统计。
+     *
+     * 它全生命周期只有一天排期（matches() 仅在 startDate 命中），
+     * 完成后必然算出 1/1 —— 而「连续 1 天、最长 1 天」对纯提醒日程是纯噪音。
+     * 这里锁住「归零」这个语义，UI 侧据此换成说明性文案。
+     */
+    @Test
+    fun oneShotScheduleNeverProducesStreak() {
+        val habit = oneShot("2026-09-17")
+
+        // 当天已完成
+        val done = StreakCalculator.calculate(
+            habit = habit,
+            checkInsByDate = checkInsOn("2026-09-17"),
+            referenceToday = LocalDate.of(2026, 9, 17)
+        )
+        assertEquals(0, done.currentStreak)
+        assertEquals(0, done.longestStreak)
+
+        // 次日回看：依然不产生连续
+        val nextDay = StreakCalculator.calculate(
+            habit = habit,
+            checkInsByDate = checkInsOn("2026-09-17"),
+            referenceToday = LocalDate.of(2026, 9, 18)
+        )
+        assertEquals(0, nextDay.currentStreak)
+        assertEquals(0, nextDay.longestStreak)
+
+        // 完全没打卡时同样是 0/0，不能因为排期只有一天就给出 1
+        val missed = StreakCalculator.calculate(
+            habit = habit,
+            checkInsByDate = emptyMap(),
+            referenceToday = LocalDate.of(2026, 9, 17)
+        )
+        assertEquals(0, missed.currentStreak)
+        assertEquals(0, missed.longestStreak)
     }
 }

@@ -56,8 +56,14 @@ import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-private val DETAIL_EMERALD = Color(0xFF10B981)
 private val DETAIL_PURPLE = Color(0xFF8B5CF6)
+
+/**
+ * 「完成」的强调色，取当前主题主色（理由同 CalendarMonthView.calAccent：
+ * 写死的 #10B981 与计划色板第一支同值，会和「某个计划恰好是翡翠绿」混淆）。
+ */
+@Composable
+private fun detailAccent(): Color = MaterialTheme.colorScheme.primary
 
 private val DETAIL_WEEKDAYS = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
@@ -218,7 +224,7 @@ private fun DayDetailPlanCard(
     onRemovePhoto: () -> Unit,
     onViewPhoto: (String) -> Unit
 ) {
-    val habitColor = parseColorSafe(habit.colorHex, DETAIL_EMERALD)
+    val habitColor = parseColorSafe(habit.colorHex, detailAccent())
     val isDone = HabitSchedule.isCompleted(habit, checkIn)
     val count = HabitSchedule.currentCount(checkIn)
     val target = HabitSchedule.effectiveTarget(habit)
@@ -229,9 +235,9 @@ private fun DayDetailPlanCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(if (isDone) DETAIL_EMERALD.copy(alpha = 0.06f) else MaterialTheme.colorScheme.surface)
+            .background(if (isDone) detailAccent().copy(alpha = 0.06f) else MaterialTheme.colorScheme.surface)
             .then(
-                if (isDone) Modifier.border(1.dp, DETAIL_EMERALD.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                if (isDone) Modifier.border(1.dp, detailAccent().copy(alpha = 0.35f), RoundedCornerShape(18.dp))
                 else Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
             )
             .padding(12.dp)
@@ -254,7 +260,7 @@ private fun DayDetailPlanCard(
                 Icon(
                     imageVector = if (isDone) Icons.Outlined.CheckCircle else UiIcons.RadioButtonUnchecked,
                     contentDescription = null,
-                    tint = if (isDone) DETAIL_EMERALD else MaterialTheme.colorScheme.outline,
+                    tint = if (isDone) detailAccent() else MaterialTheme.colorScheme.outline,
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -322,13 +328,13 @@ private fun DayDetailPlanCard(
                         text = "$count/$target ${habit.unit}",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isDone) DETAIL_EMERALD else MaterialTheme.colorScheme.onSurface,
+                        color = if (isDone) detailAccent() else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 8.dp)
                     )
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(DETAIL_EMERALD)
+                            .background(detailAccent())
                             .clickable {
                                 val justReachedTarget = count < target && count + 1 >= target
                                 Haptics.play(
@@ -392,7 +398,7 @@ private fun DayDetailPlanCard(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
-                                    if (done) DETAIL_EMERALD.copy(alpha = 0.10f)
+                                    if (done) detailAccent().copy(alpha = 0.10f)
                                     else MaterialTheme.colorScheme.surface
                                 )
                                 .clickable {
@@ -412,7 +418,7 @@ private fun DayDetailPlanCard(
                                 modifier = Modifier
                                     .size(14.dp)
                                     .clip(RoundedCornerShape(4.dp))
-                                    .background(if (done) DETAIL_EMERALD else Color.Transparent)
+                                    .background(if (done) detailAccent() else Color.Transparent)
                                     .then(
                                         if (done) Modifier
                                         else Modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
@@ -442,7 +448,7 @@ private fun DayDetailPlanCard(
                                 text = if (done) "已完成" else "待完成",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (done) DETAIL_EMERALD else MaterialTheme.colorScheme.outline
+                                color = if (done) detailAccent() else MaterialTheme.colorScheme.outline
                             )
                         }
                     }

@@ -63,7 +63,7 @@ class HabitIconsTest {
     fun `getIconVector 的所有 key 都解析成非空矢量图`() {
         val keys = listOf(
             "Run", "Book", "Water", "Fitness", "Meditation", "Bike", "Sleep",
-            "Meal", "Work", "Medicine", "Money", "Music", "Walk", "Pet", "Sun",
+            "Meal", "Work", "Medicine", "Money", "Music", "Walk", "Sun",
         )
         val blank = keys.filter { nodeCount(getIconVector(it)) == 0 }
         assertEquals("这些 key 解析出的图标是空壳: $blank", emptyList<String>(), blank)

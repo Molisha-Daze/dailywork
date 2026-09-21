@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.molishadaze.weijing.model.DayProgress
@@ -156,14 +157,24 @@ fun CalendarHeatMap(
     }
 }
 
+/**
+ * 热力图色阶：四档进度由「主题主色 × 不同浓度」压到 surface 上生成。
+ *
+ * 原来是写死的翡翠绿色阶（#6EE7B7 / #10B981 / #059669 / #047857），
+ * 而 #10B981 同时是计划色板的第一支 —— 于是「完成度高」和「某天全是翡翠绿的计划」
+ * 在图上长得一样。改成跟随主题后，色阶永远落在低饱和中性色上。
+ *
+ * 空档直接用 surfaceVariant：它本来就是「无内容」的语义色，比写死灰阶更贴主题。
+ */
 @Composable
 private fun getHeatMapColor(ratio: Float): Color {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val surface = MaterialTheme.colorScheme.surface
+    val primary = MaterialTheme.colorScheme.primary
     return when {
-        ratio <= 0f -> if (isDark) Color(0xFF262626) else Color(0xFFE5E7EB)
-        ratio < 0.34f -> Color(0xFF6EE7B7) // Light Emerald
-        ratio < 0.67f -> Color(0xFF10B981) // Medium Emerald
-        ratio < 0.99f -> Color(0xFF059669) // Deep Emerald
-        else -> Color(0xFF047857)          // 100% Full Emerald
+        ratio <= 0f -> MaterialTheme.colorScheme.surfaceVariant
+        ratio < 0.34f -> primary.copy(alpha = 0.35f).compositeOver(surface)
+        ratio < 0.67f -> primary.copy(alpha = 0.60f).compositeOver(surface)
+        ratio < 0.99f -> primary.copy(alpha = 0.80f).compositeOver(surface)
+        else -> primary
     }
 }
