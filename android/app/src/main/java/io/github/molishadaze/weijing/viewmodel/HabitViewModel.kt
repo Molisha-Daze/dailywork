@@ -5,9 +5,11 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import io.github.molishadaze.weijing.data.AppUpdateSource
 import io.github.molishadaze.weijing.data.DailyQuote
 import io.github.molishadaze.weijing.data.DailyQuotes
 import io.github.molishadaze.weijing.data.QuotePolicy
+import io.github.molishadaze.weijing.data.RemoteAppUpdate
 import io.github.molishadaze.weijing.data.RemoteQuoteSource
 import io.github.molishadaze.weijing.data.dao.CheckInWithHabit
 import io.github.molishadaze.weijing.data.entity.CheckIn
@@ -17,11 +19,17 @@ import io.github.molishadaze.weijing.data.entity.StandaloneCounter
 import io.github.molishadaze.weijing.data.repository.HabitRepository
 import io.github.molishadaze.weijing.model.HabitWithStats
 import io.github.molishadaze.weijing.model.UpcomingHabit
+import io.github.molishadaze.weijing.util.ApkDownloader
+import io.github.molishadaze.weijing.util.ApkInstaller
 import io.github.molishadaze.weijing.util.AppSettings
+import io.github.molishadaze.weijing.util.AppUpdatePolicy
 import io.github.molishadaze.weijing.util.DateUtils
 import io.github.molishadaze.weijing.util.HabitSchedule
 import io.github.molishadaze.weijing.util.ImageStorageManager
+import java.io.File
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -329,7 +337,172 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             _todayQuote.value = quote
         }
     }
+
+    // ---------- 应用内自更新 ----------
+
+    private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
+
+    /** 更新流程的当前状态，供界面渲染弹窗。 */
+    val updateState: StateFlow<UpdateState> = _updateState
+
+    private var updateJob: Job? = null
+
+    /**
+     * 检查有没有新版本。
+     *
+     * [localVersionCode] 由界面层读好传进来，而不是在这里拿 Context 去取 ——
+     * ViewModel 不碰 Context 是本工程的硬约定（只有 Haptics 那种必须在非 UI 层
+     * 拿 Context 的场景才打破它，这里没那个必要）。
+     *
+     * [silent] = true 是启动时的静默检查，它有两条刻意的**不对称**：
+     * 1. 24 小时内不重复请求（理由见 [AppSettings.lastUpdateCheckAt]）；
+     * 2. 只有真的发现新版本才改状态，没新版时安静地回到 Idle，什么都不弹。
+     * 手动检查正好相反：无论结果如何都要给反馈 ——「点了一下没反应」
+     * 比「明确告诉你已经是最新」糟糕得多。
+     */
+    fun checkForUpdate(settings: AppSettings, localVersionCode: Int, silent: Boolean) {
+        val current = _updateState.value
+        if (current is UpdateState.Checking || current is UpdateState.Downloading) return
+
+        if (silent) {
+            val elapsed = System.currentTimeMillis() - settings.lastUpdateCheckAt()
+            // elapsed 为负说明系统时间被往回调过，这种情况直接放行，不要把用户永久卡在「检查不了」里。
+            if (elapsed in 0 until UPDATE_CHECK_INTERVAL_MS) return
+        }
+
+        _updateState.value = UpdateState.Checking
+        viewModelScope.launch {
+            val latest = AppUpdateSource.fetchLatest()
+            settings.markUpdateChecked(System.currentTimeMillis())
+
+            _updateState.value = when {
+                latest == null ->
+                    if (silent) UpdateState.Idle
+                    else UpdateState.Failed("检查更新失败，请检查网络后重试")
+                AppUpdatePolicy.isNewer(latest.versionCode, localVersionCode) ->
+                    UpdateState.Available(latest)
+                silent -> UpdateState.Idle
+                else -> UpdateState.UpToDate
+            }
+        }
+    }
+
+    /**
+     * 下载并校验新版本。成功后进 [UpdateState.Ready]，由界面层接手安装。
+     *
+     * 下载地址和请求头都取自 [RemoteAppUpdate] —— 它们**必须**是 `AppUpdateSource`
+     * 算好的那一份，不能在这里自己拼：GitHub 的包只有走 API 资产端点 + `Accept`
+     * 才拿得到，Gitee 则是普通直链，两者规则不同，混了就必然有一边下不来。
+     *
+     * 下载跑在 viewModelScope 上，所以**用户把弹窗关掉也不会中断**；
+     * 真想停下来得走 [cancelUpdate]。
+     */
+    fun downloadUpdate(context: Context) {
+        val update = (_updateState.value as? UpdateState.Available)?.update ?: return
+        updateJob?.cancel()
+
+        val appContext = context.applicationContext
+        _updateState.value = UpdateState.Downloading(0)
+        updateJob = viewModelScope.launch {
+            try {
+                var lastPercent = -1
+                val apk = ApkDownloader.download(
+                    context = appContext,
+                    url = update.apkUrl,
+                    fileName = "weijing-${update.versionCode}.apk",
+                    expectedSize = update.sizeBytes,
+                    headers = update.apkHeaders,
+                    onProgress = { done, total ->
+                        val percent = if (total > 0L) ((done * 100) / total).toInt() else 0
+                        // 64KB 一次回调，20MB 就是三百多次。不节流的话，除了那 100 次
+                        // 「百分比真的变了」的，其余全是在白白触发重组。
+                        if (percent != lastPercent) {
+                            lastPercent = percent
+                            _updateState.value = UpdateState.Downloading(percent)
+                        }
+                    }
+                )
+
+                val problem = ApkInstaller.verify(appContext, apk, update.versionCode)
+                if (problem == null) {
+                    _updateState.value = UpdateState.Ready(apk, update)
+                } else {
+                    // 校验不过的包留着没有任何意义，只会占地方并干扰下一次下载。
+                    apk.delete()
+                    _updateState.value = UpdateState.Failed(problem)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _updateState.value = UpdateState.Failed("下载失败：${e.message ?: "网络异常"}")
+            }
+        }
+    }
+
+    /** 主动中断下载（弹窗上的「取消下载」）。 */
+    fun cancelUpdate() {
+        updateJob?.cancel()
+        updateJob = null
+        _updateState.value = UpdateState.Idle
+    }
+
+    /**
+     * 界面层调起系统安装器失败时回报。
+     *
+     * 传 [message] 是为了区分两种失败：设备上没有安装器（用默认文案），
+     * 与文件已被系统清掉（需要用户重新下载 —— 说清楚他才知道下一步干什么）。
+     */
+    fun reportInstallFailure(message: String? = null) {
+        _updateState.value = UpdateState.Failed(
+            message ?: "无法调起系统安装界面，请稍后重试"
+        )
+    }
+
+    /** 关掉更新弹窗回到 Idle。下载过程中不允许调用，由界面层拦住。 */
+    fun dismissUpdate() {
+        if (_updateState.value is UpdateState.Downloading) return
+        _updateState.value = UpdateState.Idle
+    }
 }
+
+/**
+ * 自更新的界面状态。
+ *
+ * 用密封接口而不是「几个布尔量 + 一个进度值」：自更新的各阶段天然互斥，
+ * 用布尔量拼装立刻就会出现「既在下载、又没有可用版本」这种非法组合。
+ * 非法状态只要存在，早晚会有人在某个分支里读到它，然后花半天去查它为什么不可能发生。
+ */
+sealed interface UpdateState {
+    /** 什么都没发生。 */
+    data object Idle : UpdateState
+
+    /** 正在问远端要版本信息。 */
+    data object Checking : UpdateState
+
+    /** 已是最新（只有手动检查才会进这个状态）。 */
+    data object UpToDate : UpdateState
+
+    /** 发现新版本，等用户决定要不要下。 */
+    data class Available(val update: RemoteAppUpdate) : UpdateState
+
+    /** 下载中，[percent] 取 0~100。 */
+    data class Downloading(val percent: Int) : UpdateState
+
+    /** 已下载且校验通过，可以交给系统安装器了。 */
+    data class Ready(val apk: File, val update: RemoteAppUpdate) : UpdateState
+
+    /** 出错了，[message] 是可以直接讲给用户听的说明。 */
+    data class Failed(val message: String) : UpdateState
+}
+
+/**
+ * 启动时静默检查的最小间隔。
+ *
+ * 选择按「时间间隔」限频，而不是「每个版本只提示一次」，是因为后者有个尴尬的副作用：
+ * 用户这次拒绝了更新，就再也不会被提醒 —— 直到他自己想起来去点「检查更新」，
+ * 而那恰恰是我们想避免的情况。按时间限频则温和得多：拒绝之后隔一天再问一次。
+ */
+private const val UPDATE_CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
 
 class HabitViewModelFactory(private val repository: HabitRepository) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

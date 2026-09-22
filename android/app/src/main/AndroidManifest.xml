@@ -21,6 +21,14 @@
            少一个权限就少一份解释成本。 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- 应用内自更新：下载新版本 APK 后调起系统安装器。
+         系统层面这是「普通权限」，安装时即授予，不需要运行时申请；但真正能否安装
+         还要看用户是否在「安装未知应用」里放行了本应用（ApkInstaller 会主动引导）。
+         ⚠️ Google Play 政策明文禁止把该权限用于自我更新。本应用不上架 Play，
+         走的是固定地址分发（GitHub Releases），不受该政策约束；
+         将来若要上架，这个功能必须改成跳商店更新。 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <application
         android:name=".HabitApplication"
         android:allowBackup="true"
@@ -63,6 +71,19 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
+
+        <!-- 把下载到 cacheDir/update/ 的 APK 以 content:// 形式交给系统安装器。
+             Android 7.0 起禁止用 file:// 把文件路径直接暴露给别的应用（FileUriExposedException），
+             必须经由 FileProvider。exported=false + 单次读授权，暴露范围见 res/xml/update_file_paths.xml。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
 
     </application>
 

@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import io.github.molishadaze.weijing.ui.components.AppUpdateHost
 import io.github.molishadaze.weijing.ui.components.UiIcons
 import io.github.molishadaze.weijing.ui.components.notificationSettingsIntent
 import io.github.molishadaze.weijing.ui.theme.AppTheme
@@ -213,4 +214,9 @@ fun MainScreen(viewModel: HabitViewModel, settings: AppSettings) {
             }
         }
     }
+
+    // 应用内自更新：静默检查、更新弹窗、未知来源权限引导、调起系统安装器。
+    // 挂在 MainScreen 这一层而不是某个 tab 里，是因为它得在**任何** tab 上都能弹出来 ——
+    // 启动时的静默检查完全可能发生在用户正看着「今日打卡」页的时候。
+    AppUpdateHost(viewModel = viewModel, settings = settings)
 }

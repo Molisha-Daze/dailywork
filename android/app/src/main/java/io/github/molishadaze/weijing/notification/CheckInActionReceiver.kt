@@ -6,8 +6,8 @@ import android.content.Intent
 import io.github.molishadaze.weijing.data.HabitDatabase
 import io.github.molishadaze.weijing.data.entity.CheckIn
 import io.github.molishadaze.weijing.util.DateUtils
+import io.github.molishadaze.weijing.util.Feedback
 import io.github.molishadaze.weijing.util.HabitSchedule
-import io.github.molishadaze.weijing.util.Haptics
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -70,8 +70,13 @@ class CheckInActionReceiver : BroadcastReceiver() {
                         )
                     }
                     // 这条路径完全在后台完成，用户看不到界面上的任何变化，
-                    // 振动是他唯一能确认「确实记上了」的反馈。所以这里给强振。
-                    Haptics.play(Haptics.Level.STRONG)
+                    // 触觉是他唯一能确认「确实记上了」的反馈，所以照旧给强振。
+                    //
+                    // 音效则交给 [Sounds] 自己拦下：它跟踪 Activity 可见性，
+                    // 后台调用不会出声 —— 用户可能正在开会，或人在别的 app 里。
+                    // 这里刻意用统一入口而不是直接调 [Haptics]，是为了让「后台不出声」
+                    // 由机制保证，而不是靠在每个后台调用点手工记得「别忘了别写音效」。
+                    Feedback.fire(Feedback.Event.HABIT_DONE)
 
                     // Dismiss the notification
                     NotificationHelper.cancelNotification(context, habitId)

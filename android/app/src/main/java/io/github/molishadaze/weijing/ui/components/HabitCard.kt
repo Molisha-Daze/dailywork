@@ -55,8 +55,8 @@ import coil.compose.AsyncImage
 import io.github.molishadaze.weijing.data.entity.Habit
 import io.github.molishadaze.weijing.model.HabitWithStats
 import io.github.molishadaze.weijing.model.SubTask
+import io.github.molishadaze.weijing.util.Feedback
 import io.github.molishadaze.weijing.util.HabitSchedule
-import io.github.molishadaze.weijing.util.Haptics
 import java.io.File
 
 /** 与网页版 emerald-500 一致的完成态色。 */
@@ -71,6 +71,20 @@ fun HabitCard(
     onPhotoSelected: (android.net.Uri) -> Unit,
     onPhotoClick: (String) -> Unit,
     onRemovePhoto: () -> Unit,
+    /**
+     * 本次操作是否会「完成今天的所有排期」。
+     *
+     * 由今日页算好后传入（`completedCount + 1 == totalCount`），卡片据此
+     * 把成就音从「完成一项」升级成全天级别的收尾音。
+     *
+     * 为什么必须在**点击的当下**提前判定、当作参数传进来，而不是等状态回流后
+     * 在页面层做边沿检测：后者会让 PLAN_DONE 与 DAY_DONE 在几百毫秒内先后响两声，
+     * 叠成噪音；而如果为了避重叠去「抑制先响的那一声」，声音又会与动作错位。
+     * 只有提前知道，才可能只响一次、且是响对的那一次。
+     *
+     * 历史页（日历 / 详情弹窗）看的是任意日期，没有「今天全齐」的概念，保持默认 false。
+     */
+    completesDay: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -79,6 +93,9 @@ fun HabitCard(
     val photoPath = item.todayCheckIn?.photoPath
     val count = HabitSchedule.currentCount(item.todayCheckIn)
     val target = HabitSchedule.effectiveTarget(habit)
+    // 「一次性任务」看排期语义，不看 recurrenceType 字面值：
+    // 「每天」+ 生效区间只有一天这类计划同样是只出现一次，详见 HabitSchedule.isOneShot。
+    val isOneShot = HabitSchedule.isOneShot(habit)
 
     // Android Photo Picker launcher (compatible down to Android 10 without storage permission)
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -170,10 +187,10 @@ fun HabitCard(
 
                     Spacer(modifier = Modifier.height(2.dp))
 
-                    // 单次计划（TYPE_NONE）没有「连续 / 最长」可言：它全生命周期只有一天排期，
-                    // 一旦完成必然算出 连续1天 / 最长1天 —— 对纯提醒性质的日程是纯噪音。
+                    // 一次性任务（显式「单次」+ 单日生效区间的伪循环）没有「连续 / 最长」可言：
+                    // 它全生命周期只有一天排期，一旦完成必然算出 连续1天 / 最长1天 —— 纯噪音。
                     // 这里换成一句说明性文案，火苗图标一并去掉（它是连续打卡的语义符号）。
-                    if (habit.recurrenceType == HabitSchedule.TYPE_NONE) {
+                    if (isOneShot) {
                         Text(
                             text = "单次任务，点完消失~",
                             style = MaterialTheme.typography.bodySmall,
@@ -203,8 +220,10 @@ fun HabitCard(
                         }
                     }
 
-                    // 非每日习惯要说明排期，否则用户会奇怪「它怎么有时不出现」
-                    if (habit.recurrenceType != HabitSchedule.TYPE_DAILY) {
+                    // 非每日习惯要说明排期，否则用户会奇怪「它怎么有时不出现」。
+                    // 一次性任务即使底层是「每天」，也必须说清楚「仅某天」——
+                    // 否则区间只有一天的伪循环会被当成天天出现，而字面上又没有排期说明可看。
+                    if (isOneShot || habit.recurrenceType != HabitSchedule.TYPE_DAILY) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = scheduleLabel(habit),
@@ -256,7 +275,7 @@ fun HabitCard(
                                     .clickable(enabled = count > 0) {
                                         // 减一是「撤销」语义，给最轻的反馈即可，
                                         // 绝不能和 +1 同强度——否则用户分不清自己是加还是减。
-                                        Haptics.play(Haptics.Level.LIGHT)
+                                        Feedback.fire(Feedback.Event.COUNTER_BACK)
                                         onDecrement()
                                     },
                                 contentAlignment = Alignment.Center
@@ -286,9 +305,12 @@ fun HabitCard(
                                         // count 是点击前的快照。只有「这一点刚好把它顶到目标」才值得强振；
                                         // 已经达标后再点（4/3）不给强振，否则「达标」这个信号会被稀释成每一下都一样。
                                         val justReachedTarget = count < target && count + 1 >= target
-                                        Haptics.play(
-                                            if (justReachedTarget) Haptics.Level.STRONG
-                                            else Haptics.Level.LIGHT
+                                        Feedback.fire(
+                                            when {
+                                                justReachedTarget && completesDay -> Feedback.Event.DAY_DONE
+                                                justReachedTarget -> Feedback.Event.COUNTER_GOAL
+                                                else -> Feedback.Event.COUNTER_STEP
+                                            }
                                         )
                                         onIncrement()
                                     }
@@ -331,8 +353,12 @@ fun HabitCard(
                                 // 两者若同强度，用户反复点这一颗圆点就能无限刷振动，反馈会彻底失效。
                                 // 注意：有子任务时此处走的是「整组全选/全不选」，
                                 // isCompleted 仍表示「子任务是否已全部勾满」，语义一致。
-                                Haptics.play(
-                                    if (isCompleted) Haptics.Level.LIGHT else Haptics.Level.STRONG
+                                Feedback.fire(
+                                    when {
+                                        isCompleted -> Feedback.Event.HABIT_UNDONE
+                                        completesDay -> Feedback.Event.DAY_DONE
+                                        else -> Feedback.Event.HABIT_DONE
+                                    }
                                 )
                                 onToggleCheckIn()
                             },
@@ -365,6 +391,7 @@ fun HabitCard(
                     subTasks = habit.subTaskList,
                     completedIds = item.todayCheckIn?.completedSubTaskIdList.orEmpty(),
                     tint = habitColor,
+                    completesDay = completesDay,
                     onToggle = onToggleSubTask
                 )
             }
@@ -494,6 +521,8 @@ private fun SubTaskSection(
     subTasks: List<SubTask>,
     completedIds: List<String>,
     tint: Color,
+    /** 透传自 [HabitCard]：这一下勾选是否会完成今天的所有排期（决定用不用全天级别的收尾音）。 */
+    completesDay: Boolean,
     onToggle: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(true) }
@@ -553,8 +582,12 @@ private fun SubTaskSection(
                 // 取消勾选属于撤销，只给轻振。
                 val toggleWithHaptic = {
                     val completesWholePlan = !done && completedCount + 1 >= total
-                    Haptics.play(
-                        if (completesWholePlan) Haptics.Level.STRONG else Haptics.Level.LIGHT
+                    Feedback.fire(
+                        when {
+                            completesWholePlan && completesDay -> Feedback.Event.DAY_DONE
+                            completesWholePlan -> Feedback.Event.PLAN_DONE
+                            else -> Feedback.Event.SUBTASK_TOGGLED
+                        }
                     )
                     onToggle(task.id)
                 }
@@ -601,17 +634,27 @@ private fun SubTaskSection(
 // internal 而不是 private：今日页的「即将到来」也要把 LocalDate 翻成「周三」这类中文星期。
 internal val WEEKDAY_CN = mapOf(1 to "一", 2 to "二", 3 to "三", 4 to "四", 5 to "五", 6 to "六", 7 to "日")
 
-fun scheduleLabel(habit: Habit): String = when (habit.recurrenceType) {
-    HabitSchedule.TYPE_NONE -> if (habit.startDate.isBlank()) "单次" else "仅 ${habit.startDate}"
-    HabitSchedule.TYPE_WEEKLY -> {
-        val days = HabitSchedule.parseWeeklyDays(habit.weeklyDays)
-        if (days.isEmpty()) "每周" else "每周 " + days.sorted().joinToString("、") { WEEKDAY_CN[it] ?: "" }
+fun scheduleLabel(habit: Habit): String {
+    // 一次性任务统一念成「仅某天」。放在 when 之前是有意的：
+    // 「每天」+ 单日生效区间这种伪循环如果走下面的分支会被念成「每天」，
+    // 用户看到的就是一张写着「每天」却只出现一次的卡。
+    if (HabitSchedule.isOneShot(habit)) {
+        val day = habit.startDate.takeIf { it.isNotBlank() }
+            ?: habit.endDate?.takeIf { it.isNotBlank() }
+        return if (day == null) "单次" else "仅 $day"
     }
-    HabitSchedule.TYPE_MONTHLY -> {
-        val days = HabitSchedule.parseMonthlyDays(habit.monthlyDays)
-        if (days.isEmpty()) "每月" else "每月 ${days.sorted().joinToString("、")} 日"
+    return when (habit.recurrenceType) {
+        HabitSchedule.TYPE_NONE -> if (habit.startDate.isBlank()) "单次" else "仅 ${habit.startDate}"
+        HabitSchedule.TYPE_WEEKLY -> {
+            val days = HabitSchedule.parseWeeklyDays(habit.weeklyDays)
+            if (days.isEmpty()) "每周" else "每周 " + days.sorted().joinToString("、") { WEEKDAY_CN[it] ?: "" }
+        }
+        HabitSchedule.TYPE_MONTHLY -> {
+            val days = HabitSchedule.parseMonthlyDays(habit.monthlyDays)
+            if (days.isEmpty()) "每月" else "每月 ${days.sorted().joinToString("、")} 日"
+        }
+        HabitSchedule.TYPE_INTERVAL -> "每 ${habit.intervalDays.coerceAtLeast(1)} 天"
+        else -> "每天"
     }
-    HabitSchedule.TYPE_INTERVAL -> "每 ${habit.intervalDays.coerceAtLeast(1)} 天"
-    else -> "每天"
 }
 // getIconVector 已上移到 HabitIcons.kt，与图标定义放在一起。

@@ -91,6 +91,15 @@ fun TodayScreen(
     val totalCount = todayHabits.size
     val progress = if (totalCount > 0) completedCount.toFloat() / totalCount else 0f
 
+    // 「再完成一项就今日全齐」。传给卡片，用于把成就音升级成全天级别的收尾音。
+    //
+    // 这里算的是「还能不能再完成一项」，卡片内部还会用 isCompleted / justReachedTarget
+    // 确认本次点击确实是「完成」方向 —— 两者组合才能得出「这次点击完成了全天」。
+    // 不在这里做状态边沿检测（监听 progress 从 <100% 跨到 100%），是因为那样
+    // PLAN_DONE 与 DAY_DONE 会先后响两声叠成噪音，而且卡片在历史页也被复用，
+    // 页面层检测拿不到「这一下点击属于哪个习惯」的上下文。
+    val completesDay = totalCount > 0 && completedCount + 1 == totalCount
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
@@ -111,82 +120,84 @@ fun TodayScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (todayHabits.isEmpty() && upcomingHabits.isEmpty()) {
-                EmptyState(
-                    title = "今天没有安排打卡计划",
-                    subtitle = "已有习惯今天不排期，或点击右下角 + 新建一个。",
-                    icon = Icons.Outlined.CheckCircle,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // 今天没有排期，但后面有：先说明「今天空着」，再按日期列出即将到来的计划。
-                    // 循环习惯在这里只出现一次（下一次），不会把未来几十次排期全铺开。
-                    if (todayHabits.isEmpty()) {
-                        item {
-                            NoScheduleTodayCard()
-                        }
-                        // 格言固定跟在「头部信息卡」之后：有排期时跟进度卡，没排期时跟这张说明卡。
-                        // 位置锚在同一视觉层级，用户不会因为今天有没有排期就找不到它 ——
-                        // 而「今天没排期」恰恰是最需要一句话的时候。
-                        item {
-                            DailyQuoteCard(quote = quote)
-                        }
-                        item {
-                            UpcomingSectionLabel(count = upcomingHabits.size)
-                        }
-                        items(
-                            items = upcomingHabits,
-                            key = { "${it.habit.id}_${it.date}" }
-                        ) { upcoming ->
-                            UpcomingHabitCard(upcoming = upcoming, today = today)
-                        }
-                    } else {
-                        // Header progress summary（网页版同款白色汇总卡 + 进度条 + 百分比）
-                        item {
-                            TodayProgressCard(
-                                completedCount = completedCount,
-                                totalCount = totalCount,
-                                progress = progress
-                            )
-                        }
-                        item {
-                            DailyQuoteCard(quote = quote)
-                        }
-                    }
+            // ⚠️ 这里刻意**不再**用 `if (空) 空状态 else 列表` 分流。
+            // 只要分流，格言卡就会被关在 else 里，于是「一条日程都没有」那天反而看不到句子 ——
+            // 而那天恰恰是最需要一句话的时候。现在列表恒在，靠 item 顺序拼装：
+            // 头部信息卡（三选一）→ 格言卡 →（今天没排期时）即将到来 → 今日习惯。
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // 头部信息卡三选一：
+                // 有排期 → 进度汇总；今天空着但后面有 → 「今天没有排期」说明卡；
+                // 彻底没有任何活跃计划 → 空状态（此时格言仍然会出现在它下面）。
+                item(key = "header") {
+                    when {
+                        todayHabits.isNotEmpty() -> TodayProgressCard(
+                            completedCount = completedCount,
+                            totalCount = totalCount,
+                            progress = progress
+                        )
 
-                    // Habit list
-                    items(
-                        items = todayHabits,
-                        key = { it.habit.id }
-                    ) { item ->
-                        HabitCard(
-                            item = item,
-                            // 有大计划时，整卡点击是「整组全选 / 全不选」而不是简单的有↔无，
-                            // 否则会出现「勾了 2/4 项却被整卡一击标成已完成」的矛盾状态。
-                            onToggleCheckIn = {
-                                if (item.hasSubTasks) {
-                                    viewModel.toggleSubTaskGroup(item.habit.id)
-                                } else {
-                                    viewModel.toggleCheckIn(item.habit.id)
-                                }
-                            },
-                            onToggleSubTask = { subTaskId ->
-                                viewModel.toggleSubTask(item.habit.id, subTaskId)
-                            },
-                            onIncrement = { viewModel.incrementCheckIn(item.habit.id) },
-                            onDecrement = { viewModel.decrementCheckIn(item.habit.id) },
-                            onPhotoSelected = { uri ->
-                                viewModel.attachPhotoFromUri(context, item.habit.id, uri)
-                            },
-                            onPhotoClick = { path -> selectedPhotoPath = path },
-                            onRemovePhoto = { viewModel.removePhoto(item.habit.id) }
+                        upcomingHabits.isNotEmpty() -> NoScheduleTodayCard()
+
+                        else -> EmptyState(
+                            title = "今天没有安排打卡计划",
+                            subtitle = "已有习惯今天不排期，或点击右下角 + 新建一个。",
+                            icon = Icons.Outlined.CheckCircle
                         )
                     }
+                }
+
+                // 每日格言永远是第二块，位置锚在同一视觉层级：
+                // 用户不会因为「今天有没有排期 / 有没有计划」就找不到它。
+                item(key = "quote") {
+                    DailyQuoteCard(quote = quote)
+                }
+
+                // 今天没有排期，但后面有：按日期列出即将到来的计划。
+                // 循环习惯在这里只出现一次（下一次），不会把未来几十次排期全铺开。
+                if (todayHabits.isEmpty() && upcomingHabits.isNotEmpty()) {
+                    item(key = "upcomingLabel") {
+                        UpcomingSectionLabel(count = upcomingHabits.size)
+                    }
+                    items(
+                        items = upcomingHabits,
+                        key = { "${it.habit.id}_${it.date}" }
+                    ) { upcoming ->
+                        UpcomingHabitCard(upcoming = upcoming, today = today)
+                    }
+                }
+
+                // Habit list
+                items(
+                    items = todayHabits,
+                    key = { it.habit.id }
+                ) { item ->
+                    HabitCard(
+                        item = item,
+                        completesDay = completesDay,
+                        // 有大计划时，整卡点击是「整组全选 / 全不选」而不是简单的有↔无，
+                        // 否则会出现「勾了 2/4 项却被整卡一击标成已完成」的矛盾状态。
+                        onToggleCheckIn = {
+                            if (item.hasSubTasks) {
+                                viewModel.toggleSubTaskGroup(item.habit.id)
+                            } else {
+                                viewModel.toggleCheckIn(item.habit.id)
+                            }
+                        },
+                        onToggleSubTask = { subTaskId ->
+                            viewModel.toggleSubTask(item.habit.id, subTaskId)
+                        },
+                        onIncrement = { viewModel.incrementCheckIn(item.habit.id) },
+                        onDecrement = { viewModel.decrementCheckIn(item.habit.id) },
+                        onPhotoSelected = { uri ->
+                            viewModel.attachPhotoFromUri(context, item.habit.id, uri)
+                        },
+                        onPhotoClick = { path -> selectedPhotoPath = path },
+                        onRemovePhoto = { viewModel.removePhoto(item.habit.id) }
+                    )
                 }
             }
 

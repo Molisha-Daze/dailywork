@@ -38,8 +38,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import io.github.molishadaze.weijing.data.entity.CheckIn
 import io.github.molishadaze.weijing.data.entity.Habit
+import io.github.molishadaze.weijing.util.Feedback
 import io.github.molishadaze.weijing.util.HabitSchedule
-import io.github.molishadaze.weijing.util.Haptics
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -260,7 +260,9 @@ private fun CalendarDayPlanRow(
                     .clip(CircleShape)
                     .clickable {
                         // 日历里补打卡同样是「完成」，给强振；取消只给轻振。
-                        Haptics.play(if (isDone) Haptics.Level.LIGHT else Haptics.Level.STRONG)
+                        Feedback.fire(
+                            if (isDone) Feedback.Event.HABIT_UNDONE else Feedback.Event.HABIT_DONE
+                        )
                         onToggle()
                     },
                 contentAlignment = Alignment.Center
@@ -334,7 +336,7 @@ private fun CalendarDayPlanRow(
                             .clip(RoundedCornerShape(7.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .clickable(enabled = count > 0) {
-                                Haptics.play(Haptics.Level.LIGHT)
+                                Feedback.fire(Feedback.Event.COUNTER_BACK)
                                 onDecrement()
                             },
                         contentAlignment = Alignment.Center
@@ -360,8 +362,9 @@ private fun CalendarDayPlanRow(
                             .background(calAccent())
                             .clickable {
                                 val justReachedTarget = count < target && count + 1 >= target
-                                Haptics.play(
-                                    if (justReachedTarget) Haptics.Level.STRONG else Haptics.Level.LIGHT
+                                Feedback.fire(
+                                    if (justReachedTarget) Feedback.Event.COUNTER_GOAL
+                                    else Feedback.Event.COUNTER_STEP
                                 )
                                 onIncrement()
                             }
@@ -458,9 +461,9 @@ private fun CalendarDayPlanRow(
                                     // 勾满最后一项才强振，中途每勾一项给轻振。
                                     val completesWholePlan =
                                         !done && completedIds.size + 1 >= habit.subTaskList.size
-                                    Haptics.play(
-                                        if (completesWholePlan) Haptics.Level.STRONG
-                                        else Haptics.Level.LIGHT
+                                    Feedback.fire(
+                                        if (completesWholePlan) Feedback.Event.PLAN_DONE
+                                        else Feedback.Event.SUBTASK_TOGGLED
                                     )
                                     onToggleSubTask(task.id)
                                 }

@@ -72,6 +72,58 @@ class AppSettings(context: Context) {
     }
 
     /**
+     * 音效反馈主开关，默认开启。
+     *
+     * 与 [hapticEnabled] 完全同构（同步 + Flow 双形态），原因也一样：
+     * [Sounds] 在每次播放前需要**同步**判定，等不及 Flow 发射；
+     * 而管理中心的开关 UI 需要响应式刷新。
+     *
+     * 默认开而细节音效默认关，是一条刻意的分界线：
+     * 成就音（打卡完成、计数达标）频率低、信息量大，值得默认开；
+     * 细节音频率高，默认开等于把反馈变成噪音。
+     */
+    val soundEnabled: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_SOUND_ENABLED) {
+                trySend(prefs.getBoolean(KEY_SOUND_ENABLED, DEFAULT_SOUND_ENABLED))
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(prefs.getBoolean(KEY_SOUND_ENABLED, DEFAULT_SOUND_ENABLED))
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    /** 同步读取音效总开关，供 [Sounds] 使用。 */
+    fun isSoundEnabled(): Boolean = prefs.getBoolean(KEY_SOUND_ENABLED, DEFAULT_SOUND_ENABLED)
+
+    fun setSoundEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SOUND_ENABLED, enabled).apply()
+    }
+
+    /**
+     * 细节音效开关（勾选子任务、计数器步进、撤销），默认**关闭**。
+     *
+     * 是 [soundEnabled] 的下级：主开关关掉时它一并失效，反之不成立。
+     */
+    val soundDetailEnabled: Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_SOUND_DETAIL_ENABLED) {
+                trySend(prefs.getBoolean(KEY_SOUND_DETAIL_ENABLED, DEFAULT_SOUND_DETAIL_ENABLED))
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        trySend(prefs.getBoolean(KEY_SOUND_DETAIL_ENABLED, DEFAULT_SOUND_DETAIL_ENABLED))
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    fun isSoundDetailEnabled(): Boolean =
+        prefs.getBoolean(KEY_SOUND_DETAIL_ENABLED, DEFAULT_SOUND_DETAIL_ENABLED)
+
+    fun setSoundDetailEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_SOUND_DETAIL_ENABLED, enabled).apply()
+    }
+
+    /**
      * 示例数据是否已经播种过。
      *
      * 必须记这个标记，不能简单地「数据为空就播种」：那样用户一旦手动删完所有习惯，
@@ -83,6 +135,20 @@ class AppSettings(context: Context) {
 
     fun markSampleSeeded() {
         prefs.edit().putBoolean(KEY_SAMPLE_SEEDED, true).apply()
+    }
+
+    /**
+     * 上一次检查应用更新的时间戳（毫秒）。0 表示从未检查过。
+     *
+     * 存在的唯一理由是**限频**：启动时的静默检查如果不加限制，用户一天开 20 次 App
+     * 就会打 20 次 GitHub API —— 未认证请求每小时只有 60 次额度，同一个出口 IP 下
+     * 几个人一起用很容易被限流；而限流的表现是「从此再也检查不到更新」，极难排查。
+     * 24 小时一次足够：这个 App 没有需要当天内修复的紧急问题。
+     */
+    fun lastUpdateCheckAt(): Long = prefs.getLong(KEY_UPDATE_CHECK_AT, 0L)
+
+    fun markUpdateChecked(at: Long) {
+        prefs.edit().putLong(KEY_UPDATE_CHECK_AT, at).apply()
     }
 
     /**
@@ -156,9 +222,14 @@ class AppSettings(context: Context) {
         const val PREF_NAME = "app_settings"
         const val KEY_HAPTIC_ENABLED = "haptic_enabled"
 
+        /** 同样公开：[Sounds] 也要直接监听同一个文件。 */
+        const val KEY_SOUND_ENABLED = "sound_enabled"
+        const val KEY_SOUND_DETAIL_ENABLED = "sound_detail_enabled"
+
         private const val KEY_FONT_SCALE = "font_scale"
         private const val KEY_SAMPLE_SEEDED = "sample_seeded"
         private const val KEY_THEME = "theme_id"
+        private const val KEY_UPDATE_CHECK_AT = "update_check_at"
 
         // 「今天那条远程格言」的三件套。日期存 ISO 字符串（yyyy-MM-dd），
         // 与 LocalDate.toString() 严格一致，比较时不做任何解析。
@@ -167,6 +238,10 @@ class AppSettings(context: Context) {
         private const val KEY_QUOTE_SOURCE = "quote_source"
         const val DEFAULT_FONT_SCALE = 1.0f
         const val DEFAULT_HAPTIC_ENABLED = true
+
+        /** 成就音默认开、细节音默认关 —— 分界线见 [soundEnabled] 的注释。 */
+        const val DEFAULT_SOUND_ENABLED = true
+        const val DEFAULT_SOUND_DETAIL_ENABLED = false
 
         /**
          * 默认跟随系统。取值必须与 AppTheme.AUTO.id 一致 ——

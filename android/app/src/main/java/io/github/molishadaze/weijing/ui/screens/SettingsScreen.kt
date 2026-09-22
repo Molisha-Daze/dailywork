@@ -41,6 +41,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -61,11 +63,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import io.github.molishadaze.weijing.ui.components.HabitManageSection
 import io.github.molishadaze.weijing.ui.components.UiIcons
 import io.github.molishadaze.weijing.ui.theme.AppTheme
+import io.github.molishadaze.weijing.util.ApkInstaller
 import io.github.molishadaze.weijing.util.AppSettings
 import io.github.molishadaze.weijing.util.Haptics
+import io.github.molishadaze.weijing.util.Sounds
 import io.github.molishadaze.weijing.viewmodel.HabitViewModel
 import kotlinx.coroutines.launch
 
@@ -142,6 +148,10 @@ fun SettingsScreen(
         }
 
         item {
+            SoundFeedbackCard(settings = settings)
+        }
+
+        item {
             HabitManageSection(viewModel = viewModel)
         }
     }
@@ -156,6 +166,16 @@ fun SettingsScreen(
         )
         Panel.ABOUT -> AboutDialog(
             context = context,
+            onCheckUpdate = {
+                // 先关掉「关于」，再交给全局的更新弹窗：两层弹窗叠在一起很难看，
+                // 而且更新流程本来就该由 AppUpdateHost 统一负责。
+                activePanel = null
+                viewModel.checkForUpdate(
+                    settings = settings,
+                    localVersionCode = ApkInstaller.localVersionCode(context),
+                    silent = false
+                )
+            },
             onDismiss = { activePanel = null }
         )
         Panel.BACKUP -> BackupDialog(
@@ -324,6 +344,165 @@ private fun HapticFeedbackCard(settings: AppSettings) {
                     if (next) Haptics.play(Haptics.Level.MEDIUM)
                 }
             )
+        }
+    }
+}
+
+/**
+ * 音效反馈开关。
+ *
+ * 和 [HapticFeedbackCard] 一样单独占一张卡、不进金刚区（理由见那边）。
+ * 比它多两样东西：细节音效的二级开关，以及**试听 + 系统音量诊断**。
+ *
+ * 后者不是锦上添花。音效走的是系统音量流（STREAM_SYSTEM）而不是媒体音量流
+ * —— 这样手机静音/勿扰时会自动无声（见 Sounds 里 AUDIO_ATTRIBUTES 的注释）。
+ * 代价是「没声音」多出好几种成因：App 开关没开、系统音量静音、勿扰模式、
+ * 甚至只是音量调得太低。没有诊断入口的话，用户只会得出「这功能是坏的」这一个结论。
+ */
+@Composable
+private fun SoundFeedbackCard(settings: AppSettings) {
+    val enabled by settings.soundEnabled.collectAsState(
+        initial = AppSettings.DEFAULT_SOUND_ENABLED
+    )
+    val detailEnabled by settings.soundDetailEnabled.collectAsState(
+        initial = AppSettings.DEFAULT_SOUND_DETAIL_ENABLED
+    )
+
+    // 系统音量的实时读数。必须在 ON_RESUME 时重算 —— 用户很可能是
+    // 「发现没声音 → 跑去系统设置调音量 → 切回来」，这个过程不会让本 Composable 重建，
+    // 只靠 remember 初值会一直停在旧的静音状态上，把人越导航越糊涂。
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var volumePercent by remember { mutableStateOf(Sounds.systemVolumePercent()) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                volumePercent = Sounds.systemVolumePercent()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // 几种「没反应」的成因必须分清，否则用户会把系统音量问题当成我们的 bug。
+    val subtitle = when {
+        !enabled -> "已关闭，所有操作都不会有声音"
+        volumePercent == 0 -> "系统音量已静音，音效播不出来"
+        volumePercent in 1..29 -> "系统音量偏低（$volumePercent%），可能听不清"
+        else -> "打卡完成、计数达标会有提示音"
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    // 硬编码功能色，与触觉卡的紫、金刚区的四色同属一套；
+                    // 不用主题主色，是为了不被用户切换的主题改掉，也不必和自定义计划色板比 ΔE。
+                    color = Color(0xFF0EA5E9).copy(alpha = 0.14f),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = UiIcons.VolumeUp,
+                            contentDescription = null,
+                            tint = Color(0xFF0EA5E9),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "音效反馈",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { next ->
+                        settings.setSoundEnabled(next)
+                        // 打开时立刻放一下。音效和振动不一样 —— 用户没法「凭手感」知道
+                        // 这个开关控制的是什么样的声音，不让他当场听到等于让他盲选。
+                        if (next) Sounds.preview(Sounds.Sfx.ACHIEVE_HABIT)
+                    }
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "细节音效",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "勾选子任务、计数器按一下、取消打卡时也出声",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Switch(
+                    // 主开关关掉时显示为关（虽然存储里可能还是 true）：
+                    // 它是主开关的下级，主开关一旦关掉它就彻底失效，
+                    // 这里如实反映「当前到底会不会响」，比暴露一个不起作用的选择更诚实。
+                    checked = detailEnabled && enabled,
+                    enabled = enabled,
+                    onCheckedChange = { next ->
+                        settings.setSoundDetailEnabled(next)
+                        if (next) Sounds.preview(Sounds.Sfx.STEP_SOFT)
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { Sounds.preview(Sounds.Sfx.ACHIEVE_HABIT) }) {
+                    Text("试听")
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (volumePercent < 0) "读不到系统音量" else "系统音量 $volumePercent%",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -560,7 +739,11 @@ private fun ThemeCard(
 }
 
 @Composable
-private fun AboutDialog(context: Context, onDismiss: () -> Unit) {
+private fun AboutDialog(
+    context: Context,
+    onCheckUpdate: () -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("关于") },
@@ -614,7 +797,12 @@ private fun AboutDialog(context: Context, onDismiss: () -> Unit) {
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } }
+        confirmButton = {
+            Row {
+                TextButton(onClick = onCheckUpdate) { Text("检查更新") }
+                TextButton(onClick = onDismiss) { Text("知道了") }
+            }
+        }
     )
 }
 

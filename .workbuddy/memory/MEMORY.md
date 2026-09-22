@@ -1,137 +1,164 @@
-# 项目约定 — dailywork「未竟」习惯打卡
+# 项目约定 — dailywork「未竟」（Kotlin/Compose/Room Android）
 
-> **单一实现：`android/`**（Kotlin + Compose + Room，**version = 4**）—— 唯一产物，出 APK 的那份。
-> 原 `src/` 网页版（React19+TS+Tailwind4+Vite + IndexedDB，只是安卓 App 的**浏览器演示原型**）
-> 已于 **2026-09-20 归档并删除**。原因：零代码共用、数据不互通、落后一个版本，每个功能要写两遍。
-> - 存档：`E:\anzhuo\weijing-web-archive-1.0-20260920.zip`（41 条目 / 233KB，内含 `ARCHIVE-NOTE.txt`
->   写明重建方式与 8 条已知差距）；不含 `node_modules`（锁文件齐全，`npm install` 可重建）。
-> - 另有 31 个文件在 git 历史里。⚠️ HEAD 停在 `8fed251 plfz`，工作区有**安卓的未提交改动**，
->   恢复网页版必须用精确路径 `git checkout HEAD -- src`，**绝不能 `git checkout -- .`**。
+> 唯一实现 `android/`；网页版 `src/` 2026-09-20 已删（存档 `E:\anzhuo\weijing-web-archive-1.0-20260920.zip`）。
+> ⚠️ HEAD 常落后、工作区长期大片未提交：恢复文件只 `git checkout HEAD -- <精确路径>`，**绝不** `git checkout -- .`。
 
-## 构建（Windows 离线工具链）
+## 构建 / 验证 / 模拟器 → 见技能
 
-工具链在 **E:\anzhuo\toolchain**：`jdk-17.0.20.1+1`、`gradle-8.9/bin/gradle`、
-`android-sdk`（platform-35 + build-tools 35.0.0）；无 ANDROID_HOME、无 gradlew。
+工具链 `E:\anzhuo\toolchain`（jdk-17 / gradle-8.9 / android-sdk platform-35 + build-tools 35.0.0），无 `ANDROID_HOME`、无 `gradlew`。
+- 完整命令与环境变量：skill **`android-apk-offline-build`**（含 `GRADLE_USER_HOME`、dexBuilder 沙箱/文件锁、APK 核验）。
+- MuMu 实测：skill **`android-ui-verify-mumu`**（`127.0.0.1:16384`；⚠️ 会切掉用户正在玩的游戏，**动之前先问**）。
+- Room 迁移发版：skill **`android-room-migration-release`**；启动图标：**`android-adaptive-launcher-icon`**。
+- 本仓库特有：Bash 里必须先 `export PATH=".../PortableGit/versions/1.2.0/usr/bin:$PATH"` 否则 `ls/grep` 都没有；
+  输出重定向到文件再读（别用管道）；别从 Bash 调 `cmd`。
+- 🚨 **BUILD SUCCESSFUL ≠ 测试跑了** → 必解析 `app/build/test-results/testDebugUnitTest/*.xml` 数用例。
+- 离线无新依赖；无 ui-test / robolectric / androidx.test。
 
-```bash
-export PATH="/c/Users/admin/.workbuddy/binaries/PortableGit/versions/1.2.0/usr/bin:$PATH"
-export JAVA_HOME="E:\\anzhuo\\toolchain\\jdk-17.0.20.1+1"
-export ANDROID_HOME="E:\\anzhuo\\toolchain\\android-sdk"
-export GRADLE_USER_HOME="E:\\anzhuo\\toolchain\\.gradle-home"
-"/e/anzhuo/toolchain/gradle-8.9/bin/gradle" -p "C:/Users/admin/Documents/trae_projects/lunwen/dailywork/android" \
-  :app:assembleRelease :app:testDebugUnitTest --console=plain --no-daemon
-```
+## 发版
 
-- PATH 必须补 PortableGit 的 `usr/bin`，否则 ls/tail/cat 全找不到。别从 Bash 调 `cmd`（被拦）；
-  输出重定向到文件再读，别用管道。全量 ~1.5min，增量 ~25s。
-- 核验 APK：`build-tools/35.0.0/aapt.exe dump badging` + `apksigner.bat verify --print-certs`。
+- 应用名**未竟**；namespace=applicationId=`io.github.molishadaze.weijing`；minSdk 29 / target 35。
+- 当前 **1.4.0 / versionCode 10400**。`versionCode = major*10000+minor*100+patch`（1.3.0→10300）。
+  **只改 name 不改 code = 没发新版**。
+- 发版跑 **`android/release_gitee.py`**（纯标准库）：它从 `AppUpdateSource.kt` 读仓库路径、
+  从 `build.gradle.kts` 读版本，用 App 同一套 `TAG_PATTERN` 校验后建发行版 + 传 APK + **回读校验**。
+  令牌走环境变量 `GITEE_TOKEN`（优先）或 `android/.gitee-token`（已 gitignore）。
+  `--dry-run` 只做本地检查，`--prune N` 清理旧版本附件防撞 1GB 上限。
+- 同步清单：`build.gradle.kts`、`README.md` 版本表、`strings.xml:app_name`、通知渠道 description。
+- 签名 `android/release.keystore`（别名 `weijing`）+ `keystore.properties`（均 gitignore）；**.gitignore 必须保留**。
+- `isMinifyEnabled=false` → release ≈21MB。
+- 已声明 `INTERNET`、`POST_NOTIFICATIONS`、`REQUEST_INSTALL_PACKAGES`；不加 `ACCESS_NETWORK_STATE`。
 
-## 发版（当前 1.0.1）
+## 应用内自更新（双源，v1.3.0 起开发）
 
-- 应用名 **未竟**；`namespace` = `applicationId` = **`io.github.molishadaze.weijing`**；
-  源码 `java/io/github/molishadaze/weijing/`。minSdk 29 / target 35；**无 INTERNET 权限**（全程离线）。
-- `versionCode = major*10000 + minor*100 + patch`（1.0.1 → 10001）。⚠️ 别用「与 versionName 末段对齐」
-  的老写法（1.0.1 与 1.1 都算成 11 会撞车）。**只改 name 不改 code = 没发新版**；
-  国产启动器按 versionCode 缓存图标，涨号也是图标刷新前提。
-- 签名 `android/release.keystore`（PKCS12/RSA2048/10000 天，别名 `weijing`，密码
-  `WjRXOdEtu3hwYmTqsX3ZmQhU`）+ `keystore.properties`，**均 gitignore**；缺失时 release 在**签名阶段报错**
-  （刻意设计）。证书 SHA-256 `1bb71eeb…a211f`。换签名/包名 → 老版本必须**卸载重装、数据不迁移**。
-- release **20.90MB**，`isMinifyEnabled=false`（R8 关闭是用户明确选择；开启可压到 3.14MB 但需按版本
-  归档 `mapping.txt`）。核验 dex 用 Python zipfile 按字节算，`grep -a` 对二进制会给出矛盾结论。
-- 「关于」页版本号走 `PackageManager` 自动读（`appVersionName()`），**只改 gradle 即可**，不用改文案。
-- 改版同步清单（已随网页版归档而缩短）：`strings.xml:app_name`、`build.gradle.kts`、
-  `NotificationHelper` 渠道 description、`android/README.md`。
-- ⚠️ `.gitignore` **必须保留** —— 它兼管安卓的 `*.keystore` / `*.jks` / `keystore.properties` /
-  `.iconwork/` / `.gradle/` 规则，删掉会让签名私钥被 git 跟踪（真实事故级）。
+- **Gitee 主 + GitHub 备**，并行查、取 versionCode 大者。常量在 `data/AppUpdateSource.kt` 顶部：
+  `GITEE_REPO`（**留空=不启用**）、`GITHUB_REPO`。
+- **Gitee 账号 `weijingzhishi`**（昵称 Zihang Wang，2026-09-22 注册）；
+  `GITEE_REPO = "weijingzhishi/weijing"` **已填好**（脚本也从这里读）。
+  ⚠️ 建仓库要**实名认证**；仓库**必须公开**（私有仓库的发行版附件匿名拿不到 → 自更新必失败）。
+- 🚨 实测（**必须 `curl --resolve` 绕过本机 2886 行 hosts 才算数**）：`api.github.com` ✅；
+  `release-assets.githubusercontent.com` ✅ 1.4MB/s；**`github.com` ❌ TCP 建不起来**。
+  → GitHub 下载**禁用** `browser_download_url`，必须走 `api.github.com/.../releases/assets/{id}`
+  + `Accept: application/octet-stream`（不带这个头回的是 JSON 元数据）。
+- Gitee ✅ `/releases/latest` **确实带用户上传的附件**（曾误判为「只返回源码包」——
+  其实是那批样本的最新版本身没挂附件；要判定就直接看网页 `gitee.com/{o}/{r}/releases`）。
+  附件匿名直链通：`/releases/download/` → `/attach_files/{id}/download/` → `foruda.gitee.com`（200，6MB/4.6s）。
+  对照活体样本：`wflwang/bledebug`（真实用 Gitee 做 OTA 的安卓项目）。
+- Gitee 🚨 **匿名 API 会限流**：连打 ~60–80 次后**全线** `403 Rate Limit Exceeded`，冷却 >45s。
+  响应是**纯文本** → `json.load` 报 `Extra data: line 1 column 5`；`search/*` 被限时
+  **返回 `[]` 而不是报错**。→ 排查期响应先落盘再离线解析，别反复刷。
+- Gitee ⚠️ 无 `size` 字段（附件也没有）；`assets` 混着自动源码包（靠 `.apk` 后缀过滤，**别取下标 0**）；
+  `/releases` **列表是升序**（`per_page=1` 给最旧那条）；单附件 ≤100MB / 仓库附件总量 ≤1GB。
+- 文件：`data/AppUpdateSource.kt`(双源+`UpdateChannel`)、`util/AppUpdatePolicy.kt`(纯规则+单测)、
+  `util/ApkDownloader.kt`、`util/ApkInstaller.kt`、`ui/components/AppUpdateHost.kt`、
+  `res/xml/update_file_paths.xml`；`MainScreen` 顶层挂 `AppUpdateHost`。`AppSettings` 24h 限频。
+- **无静默安装可能**（系统强制点一次「安装」+ 授权未知来源）；**首个带自更新的包仍需手动发一次**。
+- 🚨 **Kotlin 块注释可嵌套**：注释里出现 `/*`（如写路径 `` `tags/*.zip` ``）会把后面代码全吞掉，
+  报 `Missing '}'` + `Unclosed comment`，**行号完全不相关**。字符串里无害，只有注释炸。
+- ⚠️ release 包里 `res/xml/*.xml` 被 AGP **改名缩短**（如 `res/88.xml`），不是缺失；
+  核验要在缩短名 xml 里按 **UTF-16** 搜 `cache-path`。
 
-## 图标
+## 图标（`ui/components/HabitIcons.kt` 唯一来源）
 
-- `ui/components/HabitIcons.kt` 是**唯一来源**：`UiIcons` 19 + `HabitIcons` 16，同时喂养
-  `getIconVector()` 与 `PRESET_ICONS`。依赖 `material-icons-core`（已移除 35.7MB 的 extended）。
-- 🚨 **必须走 `addPath(pathData = addPathNodes(d), …)`，绝不能写 `path { addPathNodes(d) }`。**
-  `addPathNodes` 是普通函数、**不是** `PathBuilder` 扩展；写在尾随 lambda 里当语句会**编译零警告、
-  单测不报错，但返回值被丢弃 → 图标全部渲染成空白**（真实事故）。`Builder.addPath` 是唯一入口。
-  改完必须跑 `ui/components/HabitIconsTest`（反射遍历 35 个图标断言 `ImageVector.root` 节点数 > 0，
-  纯 JVM 可测，含反向探针证明不空转）。
-- 新增图标：jsdelivr 拉 `@material-design-icons/svg@latest/filled/<name>.svg`（国内可达）→
-  `addPathNodes(d)` 解析，**零人工转写**。查 Compose API 用 `javap` 列 jar 真实签名，别凭记忆。
-- **图标 key** 唯一纽带 = `HabitIcons` ↔ `Habit.iconName`（原网页 `getHabitIconComponent` 已归档）。
-  写错 key 会**静默回退成 Star**，不报错。
-- 🔥 **启动图标（自适应）：画布 108dp，启动器只看中间 72dp，安全区仅 66dp** —— 前景层图案必须缩到
-  ~66dp 四周留白，**「全出血」只适用于背景层**。生成脚本 `android/gen_icons.py`（源图在
-  `~/.workbuddy/clipboard-images/`）。`mipmap-anydpi-v26/ic_launcher.xml` 与各密度 `ic_launcher*.png`
-  **别删**（早期缺失导致编译不过）。
-  🚨 **核验「有没有被蒙版切」必须按半径算，别用外接框对角线**（66×58dp 框对角线半长 43.9dp 看着
-  "远超 36dp"，其实四角无墨 —— 犯过这错、报过假警报）。正确 = 遍历墨点取 `max(hypot(dx,dy))`；
-  分 A 可见区外=无害 / B 方形内且 >36dp=真被切 / C 33~36dp=只贴边。**前景层是不透明整图**，
-  求图案范围不能用 `alpha.getbbox()`。当前实测最远墨点 34.7dp vs 蒙版 36dp，被裁 0px。
-  **完整可复用流程见用户级 skill `android-adaptive-launcher-icon`。**
+- `UiIcons` 20 + `HabitIcons` 15；只依赖 `material-icons-core`。
+- 🚨 必须 `addPath(pathData = addPathNodes(d))`，**不能** `path { addPathNodes(d) }`
+  （返回值被丢弃 → 编译无警告、图标空白）。改完跑 `HabitIconsTest`。
+- key = `HabitIcons` ↔ `Habit.iconName`，写错**静默回退 Star**；删图标四处同删。
+- 🔥 启动图标：画布 108dp、启动器只看中间 72dp、**安全区仅 66dp**；脚本 `android/gen_icons.py`。
 
 ## 导航 / 结构
 
-4 个 tab：**今日打卡 / 历史回顾 / 计数器 / 管理中心**。
-管理中心 = 上半屏 4 个金刚区（字号/关于/备份/提醒）+ 下半屏计划清单（`SettingsScreen` 内嵌
-`HabitManageSection`）。⚠️ 别再加「习惯管理」tab；金刚区是**固定 4 入口**，别往里塞东西
-（振动开关放金刚区**下方独立卡片**）。`HabitManageSection` **不用 LazyColumn**（嵌在外层 LazyColumn 里）。
-「独立计数器」= 脱离习惯的**独立实体**；`Habit.isCounter` = 习惯内计数目标 —— **同名不同义**。
+4 tab：**今日 / 历史 / 计数器 / 管理中心**；`MainScreen` 用整数 index 切 tab，**无 navigation-compose**。
+管理中心 = 金刚区（视觉效果/关于/备份/提醒）+ 计划清单（`SettingsScreen` 内嵌 `HabitManageSection`，
+不用 LazyColumn）。**别再开新 tab**。「独立计数器」(StandaloneCounter) ≠ `Habit.isCounter`。
+
+- 🚨 **今日页不许用 `if(空) 空状态 else 列表` 分流**：一分流格言卡就被关进 else。恒为一个 LazyColumn：
+  头部卡（进度卡 / 「今天没有排期」卡 / `EmptyState` 三选一）→ 格言卡 →（今天没排期时）即将到来 → 今日习惯。
+- 今日页兜底窗口 **60 天**。
+- 每日格言：`DailyQuotes` + `RemoteQuoteSource` + `QuotePolicy` + `AppSettings` 按天缓存 + `VM.refreshTodayQuote()`。
+  降级链 **当日缓存 → 异步远程 → 内置库**；首帧给内置句，**绝不等网络**；每天最多请求一次。
+  🚨 取模用 `toEpochDay()`（不是 `dayOfYear`）且必须 `.mod()`。
+- 计数器卡片：`hasLimit` 分流两种密度；无上限时不写「无上限自由计数」、不画分隔线；内边距 14dp；按钮 40dp `IconActionBox`。
+
+## 🚨 「一次性任务」判定（改卡片前必读）
+
+`HabitSchedule.isOneShot(habit)`：`TYPE_NONE` **或**（有 endDate 且区间内只落得到一天）。
+- 不能只判 `recurrenceType == "none"`：伪循环语义上等同单次，旧代码只看字面值 → 卡片照样挂「连续 1 天」，
+  而排期说明条件是 `type != daily`，刚好一起藏掉（两头都错）。
+- 落点：`HabitCard` 用 `isOneShot` 决定「连续/最长」行与排期行；`scheduleLabel()` 对一次性统一回「仅 YYYY-MM-DD」。
+- 单测 8 条在 `HabitScheduleTest`。
 
 ## Room（version = 4）
 
-迁移史：`1_2` 建 `standalone_counters`；`2_3` habits 加 `isParentPlan`/`subTasks`、check_ins 加
-`completedSubTaskIds`；`3_4` standalone_counters 加 `resetPeriod`/`resetIntervalDays`/`periodStartDate`、
-新建 `counter_period_logs`（FK CASCADE）。
+迁移：`1_2` 建 `standalone_counters`；`2_3` habits 加 `isParentPlan`/`subTasks`、check_ins 加
+`completedSubTaskIds`；`3_4` counters 加 `resetPeriod`/`resetIntervalDays`/`periodStartDate`
++ 建 `counter_period_logs`（FK CASCADE）。
+改实体必须：①写显式 `Migration` 并 `addMigrations()`；②导出 JSON 进版本管理。**禁用 `fallbackToDestructiveMigration()`**。
+逐字段比对导出 JSON；`ALTER TABLE` 一句一列，NOT NULL 新列必须带 DEFAULT。
+- 子任务：`model/Models.kt` 的 `SubTask` + `Converters.kt`（org.json 手写）。`BackupCodec` FORMAT_VERSION = 4。
+- 周期归零：`util/CounterPeriodCalculator.kt` 纯函数；**惰性结算** `rolloverCounterPeriods()` 在 ON_RESUME 与
+  `stepCounter`/`resetCounter` 前触发，按天短路 + Mutex。
+- 示例数据播种靠持久标记 `AppSettings.sampleSeeded`（**不能靠「数据为空」**）。
 
-改实体必须同时：①写显式 `Migration(old,new)` 并在 `addMigrations()` 注册；②把新导出的
-`app/schemas/.../N.json` 纳入版本管理。**绝不可用 `fallbackToDestructiveMigration()`**（静默删库）。
-手写迁移后逐字段比对导出 JSON 的**列名/affinity/notNull**；`ALTER TABLE` 一句只能加一列，
-且 **NOT NULL 新列必须带 DEFAULT** —— 实体不写 `@ColumnInfo(defaultValue)` 时 Room 不校验该列 default，
-所以「DDL 带 DEFAULT、实体不带」既安全又必要。
+## Compose 坑（改视觉前必读）
 
-- 子任务：`model/SubTask.kt` + `data/Converters.kt`（org.json 手写 TypeConverter）。
-  **完成判定 = 子任务全部勾满**；`toggleSubTaskGroup` 一键全勾/全清；`isParentPlan` 由有无子任务推导。
-  备份 `BackupCodec` **FORMAT_VERSION = 4**（v1~v3 仍可解析，缺的字段各取默认值）。
-- 计数器周期归零（1.0.1 新增）：`util/CounterPeriodCalculator.kt` 纯函数（自然日 / 自然周周一 / 自然月 /
-  每 N 天滚动）+ `CounterPeriodCalculatorTest`（覆盖跨月跨年闰年）。**惰性结算**：
-  `HabitRepository.rolloverCounterPeriods()` 在 MainScreen 的 ON_RESUME 与 `stepCounter`/`resetCounter`
-  前触发，按天短路 + Mutex；归档进 `counter_period_logs`，同周期重复归档**合并累加**，空周期不留记录。
+1. 半透明色不能做带 elevation 的 Card 底色 → `color.compositeOver(surface)`。
+2. `Text(fontSize=…)` 不覆盖行高 → 给 `style=` 或显式 `lineHeight`。
+3. 别用 `CardDefaults.outlinedCardBorder()`（取 `outlineVariant`，本主题只覆盖 `outline`）→ 直接 `BorderStroke`。
+4. 列表排序别挂 `updatedAt`（写操作会刷新 → 每点一下跳位）。
+5. **编译通过 ≠ 画得出来**：把「有返回值的函数」当语句写进 lambda 会静默失效。
+6. 同文件改动必须**串行**提交（并行 Edit 互相覆盖），跨文件才能并行。
+7. 竖线类装饰：`Modifier.height(IntrinsicSize.Min)` + 子项 `fillMaxHeight()`。
+8. 删文件用 `rm`，**别用 `git rm`**。
+9. `Modifier.weight` 只在 `RowScope`/`ColumnScope`，提取 Composable 必须写 `private fun RowScope.Xxx(...)`。
 
-## 示例数据（`data/SampleData.kt`）
+## 触觉 / 音效（v1.3.0）
 
-**4 习惯 + 2 计数器**：喝水3杯 / 力量与体能+4子任务 / 晨跑07:30 / 深度阅读21:00 /
-冰箱可乐6-12有上限不归零 / 今日咖啡每日归零。
-⚠️ **播种必须用持久标记 `AppSettings.sampleSeeded` 判定，不能靠「数据为空」** —— 否则用户删完习惯后
-下次冷启动示例又长回来（已归档的网页版正是这缺陷，安卓没照抄）。老用户升级只补打标记、不塞示例；
-手动入口在计划清单空状态「载入示例数据」（**追加**不覆盖）。
+- 触觉 `util/Haptics.kt`，`HabitApplication.onCreate()` attach；只在 **Compose UI 层**调用（VM 无 Context）。
+  完成 → STRONG；取消/撤销 → LIGHT；计数只在「刚好达标」那次 STRONG。同级 70ms 节流且**分档独立计时**。
+- 音效入口 = **`util/Feedback.kt`**（`Feedback.fire(Event.X)`）。Event 枚举把 (触觉档位, 音效) 写进构造参数，
+  漏配直接编译失败；**新加反馈一律走它**。方案见根目录 `音效方案-未竟-20260922.md`。
+- 音效**必须比触觉保守**：不做点击音/导航音，只在「成就时刻」响。默认 7 响 / 2 关（`UNDO`、`STEP_SOFT`）。
+  **通知栏打卡路径只振不响**（`Sounds` 用 `ActivityLifecycleCallbacks` 跟踪可见性自动拦）。
+- 来源 = 本地合成 `android/gen_sfx.py`（纯标准库，本机**无 ffmpeg/numpy**），成品 `res/raw/sfx_*.wav`。
+- 音频属性走 **`USAGE_ASSISTANCE_SONIFICATION`（STREAM_SYSTEM）**：静音模式只静铃声+通知，走媒体流会导致静音下照样出声。
+  代价=系统音量 0 时听不见 → 设置页必须有**试听 + 系统音量诊断**。
+- 🚨 改触发点：节流 **150ms 且按音效各自计时**；WAV 首尾强制淡入淡出；`SoundPool.load()` 异步，
+  未就绪时 `play()` 直接返回（否则第一声静默消失）；`SubTaskSection` **新参数必须透传**。
+- 「今日全部完成」用 **`completesDay` 参数透传**（TodayScreen 算 `completedCount + 1 == totalCount`），
+  **不用** progress 边沿检测（会让 PLAN_DONE 与 DAY_DONE 叠成两声噪音）。
 
-## Compose UI 坑（改视觉前必读）
+## 主题（`ui/theme/AppTheme.kt` 唯一真相；禁用 Material You）
 
-1. **半透明色不能做带 elevation 的 Card 底色** —— M3 顺序 `graphicsLayer(clip=false)` → border →
-   background → clip，阴影会从半透明背景透出糊成暗框。用 `color.compositeOver(surface)` 合成不透明色。
-2. **`Text(fontSize=…)` 不覆盖行高** —— 会继承 bodyLarge 的 24sp lineHeight，裸写 `fontSize=12.sp`
-   实际高 24dp。给 `style=` 或显式 `lineHeight`。
-3. **别用 `CardDefaults.outlinedCardBorder()`**（取 `outlineVariant`，本主题只覆盖 `outline`）——
-   要描边直接 `BorderStroke(1.dp, color)`。
-4. **列表排序别挂 `updatedAt`** —— 写操作会刷新它，列表项每点一下都跳位。实体顺序按 id / 显式 sortOrder。
-5. **「编译通过」≠「画得出来」** —— Compose 里把「返回值的函数」当语句写在 lambda 里会静默失效
-   （编译器不报、单测不报、APK 正常）。改视觉代码后验证必须打在**真实执行路径**上。
-6. **同一批并行 Edit 同一文件会互相覆盖**（工具按同一份原文写回）—— 同文件的改动必须串行提交。
-   跨文件才能并行。
+- 🔴 主色低饱和（≤30%）且与计划/计数器色板 ΔE ≥ 25（实测最小 31.1），`AppThemeTest` 守回归。
+- 🔴 完成/选中/进度/FAB 取 `colorScheme.primary`，禁止写死 `Color(0xFF10B981)`。
+- 🚨 主色上的文字/图标用 `onPrimary`，禁止 `Color.White`。
+- ⚠️ 欠账：main 除 AppTheme 外仍有 18 处 `Color(0xFF…)`（8 文件，多为图标 tint）。
+- 主题 id 存 `AppSettings.themeId`（util 不反向依赖 ui）。
 
-## 触觉反馈（`util/Haptics.kt` 全局单例，`HabitApplication.onCreate()` attach）
+## 表单弹窗（`ui/components/FormDialog.kt`）
 
-一律在 **Compose UI 层**调用，别塞进 ViewModel（纯 VM 无 Context，改它要动构造与 Factory）。
-**完成 → STRONG；取消/撤销 → LIGHT**（同强度的话反复点击就能刷振动，反馈彻底失效）；计数类只在
-**「刚好达标」那一次**给 STRONG（`count < target && count+1 >= target`），超标后不给；导航类
-（切 tab / 翻月 / 开弹窗 / 表单输入 / 选图标）**一律不加**；同级 70ms 节流且**分档独立计时**
-（共用一个时间戳会让连点的轻振吞掉紧随其后的达标强振）。
+「新建计划」/「新建独立计数器」共用 `FormTokens`/`AppFormDialog`/`FormSection`/`FormTextField`/
+`FormDescriptionField`/`FormLabeledField`/`FormGroupCard`/`FormSwitchRow`/`FormSegmentedControl`/`FormChip`/`FormColorPicker`。
+**新增表单直接用这套，别手写间距圆角。**
+标签放输入框**上方**；底部「取消/保存」在滚动区外；内容区 `heightIn(max = screenHeightDp*0.72f)`；
+弹窗内只允许**一个**滚动区；`singleLine` 与 `minLines/maxLines` 互斥。
 
-## 杂项坑
+月历三件套（2026-09-22 拆分）：`CalendarMonthView.kt`(入口，**只持有 `currentMonth`/`selectedDate`** + `CalendarCard` + `calAccent`) /
+`CalendarMonthGrid.kt`(月头/表头/网格/`DayCell`/图例) / `CalendarDayPlanList.kt`(当天计划清单)。
+🚨 **状态宿主不能下沉**：两个 remember 挪进小块 → 翻月重建 → 选中日期丢失。
+「为某天新建计划」默认类型：未来日 `TYPE_NONE`；**今天 `TYPE_DAILY`**。
 
-- minSdk 29 → java.time 原生可用，无需 desugaring。
-- `Could not read workspace metadata … kotlin-dsl/…/metadata.bin` → kotlin-dsl 缓存损坏（构建被中断留的
-  残骸），**删掉是安全的**；紧随的 KSP `lateinit property cleanFilenames` 是 KSP 内部错，`:app:clean` 即恢复。
-- `gradle --stop` 与 `clean` 串在一条 Bash 命令里会让 Bash 收 SIGTERM（exit 1），但任务实际已执行。分开跑。
-- 单测 `testImplementation(libs.junit)` 4.13.2，纯 JVM 逻辑（`StreakCalculator`、`CounterPeriodCalculator`）
-  可直接测，不需 Robolectric。
-- 既有弃用警告（未处理）：`AddEditHabitDialog.kt` / `MainScreen.kt` 的 `LocalLifecycleOwner`
-  （compose-ui 版本；换 `lifecycle-runtime-compose` 需联网，离线环境暂不动）。
+## 现状 / 欠账
+
+- P1+P3 已执行（`b04cd89`、`c028632`）：删热力图死链与 navigation 依赖、旧包名 schemas；拆月历 + 文件归属整理。
+- P2 未做：D1 颜色治理（仅 `HabitManageSection` 计数目标徽章 `#10B981` 真违规）/ D2 星期四合一 /
+  D3 `notificationSettingsIntent` 与 `calAccent`+`detailAccent` 去重。
+- main ≈11k 行 / 50 文件；大文件：AddEditHabitDialog / SettingsScreen / StandaloneCountersScreen /
+  HabitRepository / HabitCard / CalendarDayPlanList。
+- 已知弃用警告：`AddEditHabitDialog.kt`/`MainScreen.kt` 的 `LocalLifecycleOwner`（换 `lifecycle-runtime-compose` 需联网）。
+
+## 🚨 沙箱限制
+
+只有系统目录的 exe 能跑：把 notepad 拷到 `E:\anzhuo` 都起不来（bash 直跑 `Permission denied`，
+`cmd //c start` 返回 0 但无进程，关沙箱提权也没用）。
+→ 任何「运行刚下载的安装包」需求，**直接给用户命令行让他双击**，别反复试。

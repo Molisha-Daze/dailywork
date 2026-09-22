@@ -84,6 +84,43 @@ object HabitSchedule {
         return null
     }
 
+    /**
+     * 是否「一次性任务」——该习惯在它整个生命周期里只会排期一次。
+     *
+     * 覆盖两种情形：
+     * 1. 显式单次（[TYPE_NONE]）；
+     * 2. 循环类型但生效区间里**只落得到一天**（例如「每天」+ 起止同为 2026-09-22，
+     *    或「每周三」+ 区间只罩住那一个周三）。
+     *
+     * ⚠️ 为什么不能只判 `recurrenceType == TYPE_NONE`：
+     * 上面第 2 类在语义上和单次毫无区别 —— 一生只出现一天，完成后必然算出
+     * 「连续 1 天 / 最长 1 天」这种纯噪音。只认 type 的话卡片照样挂着那行，
+     * 而且排期说明的显示条件（`type != daily`）还刚好把它**藏掉**：
+     * 该显的不显、该藏的不藏，两头都错。所以判定必须落在「排期语义」上而不是字段字面值上。
+     *
+     * 开销：最多两趟「命中即返回」的短扫描，且只在有 endDate 时才扫；
+     * 常规循环计划第一趟就直接命中第二天。
+     */
+    fun isOneShot(habit: Habit): Boolean {
+        if (habit.recurrenceType == TYPE_NONE) return true
+
+        // 没有明确结束日 = 无限循环，不可能是「只排一次」
+        val startStr = habit.startDate.takeIf { it.isNotBlank() } ?: return false
+        val endStr = habit.endDate?.takeIf { it.isNotBlank() } ?: return false
+        val start = runCatching { LocalDate.parse(startStr, ISO) }.getOrNull() ?: return false
+        val end = runCatching { LocalDate.parse(endStr, ISO) }.getOrNull() ?: return false
+        if (end.isBefore(start)) return false
+
+        // 从「起点前一天」起算，好让起点当天本身也进入候选
+        val spanDays = ChronoUnit.DAYS.between(start, end).toInt() + 1
+        val first = nextScheduledDate(habit, start.minusDays(1), spanDays) ?: return false
+
+        // 区间内只有第一次那一天
+        val remaining = ChronoUnit.DAYS.between(first, end).toInt()
+        if (remaining <= 0) return true
+        return nextScheduledDate(habit, first, remaining) == null
+    }
+
     /** 计数器目标次数，至少为 1。 */
     fun effectiveTarget(habit: Habit): Int = habit.targetCount.coerceAtLeast(1)
 

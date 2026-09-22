@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 的路径白名单。
+
+  只开 context.cacheDir/update/ 这一层 —— 应用内更新下载的 APK 就放在那里。
+  刻意不暴露 filesDir 或整个 cacheDir：FileProvider 暴露出去的每个路径，
+  都等于给「拿到 content:// 就能读」开了一扇门，多开一层就多一分风险，
+  而这个场景只需要一个目录。
+-->
+<paths>
+    <cache-path name="update" path="update/" />
+</paths>

@@ -64,7 +64,7 @@ import io.github.molishadaze.weijing.ui.components.parseColorSafe
 import io.github.molishadaze.weijing.util.CounterPeriod
 import io.github.molishadaze.weijing.util.CounterPeriodCalculator
 import io.github.molishadaze.weijing.util.DateUtils
-import io.github.molishadaze.weijing.util.Haptics
+import io.github.molishadaze.weijing.util.Feedback
 import io.github.molishadaze.weijing.viewmodel.HabitViewModel
 
 /** 与网页版 counters 页一致的紫色（tailwind purple-500）。 */
@@ -212,8 +212,8 @@ fun StandaloneCountersScreen(
                     onDelete = { pendingDelete = counter },
                     onResetClick = { pendingReset = counter },
                     onResetLongClick = {
-                        // 长按跳过了二次确认，振动就是「已经执行了」的唯一凭据。
-                        Haptics.play(Haptics.Level.MEDIUM)
+                        // 长按跳过了二次确认，反馈就是「已经执行了」的唯一凭据。
+                        Feedback.fire(Feedback.Event.CLEARED)
                         viewModel.resetCounter(counter.id)
                     }
                 )
@@ -243,6 +243,10 @@ fun StandaloneCountersScreen(
             text = { Text("确定要删除「${counter.name}」吗？此操作不可撤销。") },
             confirmButton = {
                 TextButton(onClick = {
+                    // 删除不可逆，给一次「已执行」确实认。
+                    // 音效刻意用不好听的下滑低音 —— 给破坏性操作配好听的音，
+                    // 等于在鼓励用户多删数据。
+                    Feedback.fire(Feedback.Event.CLEARED)
                     viewModel.deleteCounter(counter.id)
                     pendingDelete = null
                 }) {
@@ -262,7 +266,7 @@ fun StandaloneCountersScreen(
             text = { Text("将「${counter.name}」的数值重置为 0。（长按清零按钮可直接跳过本确认）") },
             confirmButton = {
                 TextButton(onClick = {
-                    Haptics.play(Haptics.Level.MEDIUM)
+                    Feedback.fire(Feedback.Event.CLEARED)
                     viewModel.resetCounter(counter.id)
                     pendingReset = null
                 }) {
@@ -520,7 +524,7 @@ private fun CounterValueRow(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(
                 onClick = {
-                    Haptics.play(Haptics.Level.LIGHT)
+                    Feedback.fire(Feedback.Event.COUNTER_BACK)
                     onStep(-counter.step)
                 },
                 enabled = counter.currentCount > 0,
@@ -536,13 +540,14 @@ private fun CounterValueRow(
             }
             Button(
                 onClick = {
-                    // 「刚好喝空最后一罐」才给强振。已经到上限后继续点不再强振，
+                    // 「刚好到顶」才给强反馈。已经到上限后继续点不再强化，
                     // 否则「喝完了」这个信号会被后续每一次点击淹没。
                     val justHitLimit = hasLimit &&
                         counter.currentCount < limit &&
                         counter.currentCount + counter.step >= limit
-                    Haptics.play(
-                        if (justHitLimit) Haptics.Level.STRONG else Haptics.Level.LIGHT
+                    Feedback.fire(
+                        if (justHitLimit) Feedback.Event.COUNTER_LIMIT
+                        else Feedback.Event.COUNTER_STEP
                     )
                     onStep(counter.step)
                 },

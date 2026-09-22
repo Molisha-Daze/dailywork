@@ -28,5 +28,12 @@ captures/
 *.jks
 keystore.properties
 
+# ===== Gitee 发版令牌：绝不允许进仓库 =====
+# android/release_gitee.py 优先读环境变量 GITEE_TOKEN，其次读这个文件。
+# 令牌带仓库写权限：泄露 = 别人能用你的名义发布「新版」，
+# 而所有已装用户都会自动装上去 —— 这等于一次供应链攻击。
+# （更好的做法是别落盘，直接用 `GITEE_TOKEN=xxx python release_gitee.py`。）
+.gitee-token
+
 # 图标抓取与对照生成的临时工作区（HabitIcons.kt 已自带全部路径数据，可随时重建）
 .iconwork/

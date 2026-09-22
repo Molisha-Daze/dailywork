@@ -98,10 +98,80 @@
 |---|---|---|
 | `applicationId` | `io.github.molishadaze.weijing` | 系统眼中的安装身份。**改它 = 换一个新 App**，老用户数据不跟随 |
 | `namespace` | 同上 | Java 包名 / 源码目录结构 |
-| `versionCode` / `versionName` | `10203` / `1.2.3` | versionCode 必须单调递增，否则老用户装不上新版。编码规则 `major*10000 + minor*100 + patch`，**不要**用「与 versionName 末段对齐」的写法（1.0.1 与 1.1 会撞成同一个数）。只改 versionName 不改 versionCode = 没发新版 |
+| `versionCode` / `versionName` | `10400` / `1.4.0` | versionCode 必须单调递增，否则老用户装不上新版。编码规则 `major*10000 + minor*100 + patch`，**不要**用「与 versionName 末段对齐」的写法（1.0.1 与 1.1 会撞成同一个数）。只改 versionName 不改 versionCode = 没发新版 |
 
 > ⚠️ 本版本同时换了 **签名证书**（debug → 正式）和 **包名**，因此：
 > 装过旧版的人必须**卸载重装**，数据不会自动迁移 —— 请先让他们在「管理中心 → 数据备份」导出备份。
+
+### 应用内自更新
+
+应用会自己在应用内检查、下载并调起安装新版本，不必再往群里丢 APK。分发源刻意做成**双源**：
+
+| 源 | 角色 | 用途 |
+|---|---|---|
+| **Gitee 发行版** | 主源 | 国内直连。实测首页 `connect 0.039s` / TLS `0.12s`，发布页附件可**匿名**直链下载 |
+| **GitHub Releases** | 备源 | 只在 Gitee 没发版（或挂了）时生效。零成本兜底 |
+
+两个源**并行查询、取 versionCode 大的那条**，所以任何一家出问题都不致命 —— 这是刻意的：
+单一源的失败是**静默**的（用户只会看到「已是最新」，永远收不到更新，且没有任何报错可查）。
+
+配置在 `data/AppUpdateSource.kt` 顶部两个常量：
+
+```
+GITEE_REPO  = "weijingzhishi/weijing"     // 留空 = 不启用 Gitee，只用 GitHub
+GITHUB_REPO = "Molisha-Daze/dailywork"
+```
+
+> 🚨 **Gitee 仓库必须是公开的。** 私有仓库的发行版附件匿名拿不到，自更新会 100% 失败 ——
+> 而且失败是静默的：用户只会看到「已是最新」，没有任何报错可查。
+> 另外，Gitee 从 2021 年起要求实名认证，未认证时建仓库会返回
+> `422 当前账户尚未认证身份，请通过「个人设置 - 帐号信息」下完成身份认证后再操作`。
+> 仓库里不必放源码，当纯下载容器即可。
+
+> 🚨 **`github.com` 在国内不可达（实测 TCP 都建不起来，15s 超时）**，
+> 但 `api.github.com` 和 `release-assets.githubusercontent.com` 是通的。
+> 所以 GitHub 那条链路**不能**用 `browser_download_url`，必须改用它自己的
+> `api.github.com/.../releases/assets/{id}` 并带上 `Accept: application/octet-stream`，
+> 让服务端 302 到 CDN。这段逻辑在 `AppUpdateSource.downloadRequest()`，
+> 改动前请先读那里的注释 —— 写错的症状是「下载失败」，而且**只在没有代理的国内网络下复现**。
+
+#### 每次发版要做什么
+
+1. `app/build.gradle.kts` 里 `versionCode` / `versionName` 一起加（只改 name 不改 code = 没发新版）。
+2. 构建：`:app:assembleRelease`。
+3. **发到 Gitee** —— 直接跑脚本，别手点网页：
+
+   ```bash
+   cd android
+   python release_gitee.py --notes "本次更新内容"
+   ```
+
+   脚本会自己完成：比对 `versionCode` 与 `versionName` 是否自洽 →
+   校验 APK → 建发行版（tag `v1.4.0`，写法必须能被 `AppUpdatePolicy` 解析）→
+   上传 APK 作为**附件** → **回读校验**附件确实挂上去了。
+
+   只想先看看会做什么：`python release_gitee.py --dry-run`。
+
+   需要 Gitee **私人令牌**（「设置 → 私人令牌 → 生成新令牌」，勾 `projects` 权限）：
+   优先读环境变量 `GITEE_TOKEN`，其次读 `android/.gitee-token`（已 gitignore）。
+   推荐前者，别落盘。
+
+4. （可选）在 GitHub 同步建一个同 tag 的 Release，同样传 APK。**两边都发**最稳。
+5. 发完顺手清理旧附件（见下方容量限制）：`python release_gitee.py --prune 3` 只保留最近 3 个版本。
+
+> ⚠️ **第一次仍然必须手动发一次包。** 现在大家装的 1.3.0 里没有更新功能，
+> 它不会自己升级；要先把带自更新的版本（1.4.0）手动发一次，之后才进入自动更新。
+
+> ⚠️ Gitee 免费版限制：**单个附件 ≤ 100MB**、**仓库附件总量 ≤ 1GB**（含仓库附件）。
+> 按 21MB 一个包算约 47 个版本就满了 —— 用 `--prune 3` 自动清理，否则新版传不上去。
+
+> ⚠️ Gitee 的**匿名 API 会限流**：短时间内大量请求会全线返回
+> `403 Forbidden (Rate Limit Exceeded)`，冷却超过 45 秒。（App 侧靠 24h 限频，正常使用碰不到，
+> 但**不要**给它加轮询。）另外 Gitee 的 `/releases` 列表是**升序**（旧在前），
+> 且 `/releases/latest` 只反映「最新那一条发行版」上的附件。
+
+> ⚠️ **没有「静默自动安装」这回事。** 系统强制要求用户在弹窗里点一次「安装」，
+> 首次还要先授权「允许安装未知应用」。能优化掉的只有「去群里翻文件」这一段。
 
 ### 想进一步瘦身？（可选）
 

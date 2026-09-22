@@ -3,7 +3,9 @@ package io.github.molishadaze.weijing.util
 import io.github.molishadaze.weijing.data.entity.Habit
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -168,5 +170,68 @@ class HabitScheduleTest {
         assertEquals(d("2026-09-21"), next)
         // 从「下一次」再往后问，才拿到再下一次，说明返回的单点是可递推的
         assertEquals(d("2026-09-22"), HabitSchedule.nextScheduledDate(habit, next))
+    }
+
+    // ---------- 一次性任务判定（isOneShot）----------
+    //
+    // 这组用例守的是「卡片上那行 连续/最长 该不该出现」：
+    // 只要习惯一生只排期一次，那行就必然是「连续 1 天 · 最长 1 天」的噪音。
+    // 关键点是**不能只看 recurrenceType**，否则「每天 + 单日区间」会漏判。
+
+    @Test
+    fun 显式单次计划是一次性任务() {
+        assertTrue(HabitSchedule.isOneShot(single("2026-09-22")))
+        // 区间写得多远都不影响：TYPE_NONE 的排期判定只认起点那一天
+        assertTrue(HabitSchedule.isOneShot(single("2026-09-22").copy(endDate = "2027-09-22")))
+    }
+
+    /** 常规循环计划不能被误判成一次性，否则「连续天数」会被整片摘掉。 */
+    @Test
+    fun 常规循环计划不是一次性任务() {
+        assertFalse(HabitSchedule.isOneShot(daily()))
+        assertFalse(HabitSchedule.isOneShot(daily(end = "2026-12-31")))
+        assertFalse(HabitSchedule.isOneShot(weekly("1,3,5")))
+        assertFalse(HabitSchedule.isOneShot(monthly("15")))
+        assertFalse(HabitSchedule.isOneShot(interval(3, "2026-09-18")))
+    }
+
+    /** 「每天」+ 起止同一天：用户视角就是一次性的，哪怕底层 type 是 daily。 */
+    @Test
+    fun 每天加单日生效区间算一次性任务() {
+        assertTrue(HabitSchedule.isOneShot(daily(start = "2026-09-22", end = "2026-09-22")))
+    }
+
+    @Test
+    fun 每天加多日区间仍不是一次性任务() {
+        assertFalse(HabitSchedule.isOneShot(daily(start = "2026-09-20", end = "2026-09-22")))
+    }
+
+    /** 每周三 + 区间只罩住那一个周三 → 一次性；罩住两个周三 → 不是。 */
+    @Test
+    fun 每周加单日区间按落点个数判定() {
+        // 2026-09-21 周一 → 2026-09-23 周三，区间内只有 09-23 一个周三
+        assertTrue(HabitSchedule.isOneShot(weekly("3", "2026-09-21").copy(endDate = "2026-09-23")))
+        // 延长到 09-30 → 09-23 与 09-30 两个周三
+        assertFalse(HabitSchedule.isOneShot(weekly("3", "2026-09-21").copy(endDate = "2026-09-30")))
+    }
+
+    @Test
+    fun 每月加单日区间按落点个数判定() {
+        assertTrue(HabitSchedule.isOneShot(monthly("15", "2026-09-01").copy(endDate = "2026-09-30")))
+        assertFalse(HabitSchedule.isOneShot(monthly("15", "2026-09-01").copy(endDate = "2026-10-31")))
+    }
+
+    /** 间隔计划：区间短于间隔 → 只落一次；刚好够到第二个锚点 → 不是。 */
+    @Test
+    fun 每N天按区间是否够到第二跳判定() {
+        assertTrue(HabitSchedule.isOneShot(interval(3, "2026-09-20").copy(endDate = "2026-09-22")))
+        assertFalse(HabitSchedule.isOneShot(interval(3, "2026-09-20").copy(endDate = "2026-09-23")))
+    }
+
+    /** 脏数据兜底：结束日早于开始日、每周一天没勾，都不能算「一次性」而把排期说明混淆掉。 */
+    @Test
+    fun 异常区间不会被判成一次性任务() {
+        assertFalse(HabitSchedule.isOneShot(daily(start = "2026-09-22", end = "2026-09-01")))
+        assertFalse(HabitSchedule.isOneShot(weekly("", "2026-09-21").copy(endDate = "2026-09-23")))
     }
 }
