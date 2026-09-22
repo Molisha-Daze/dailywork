@@ -1,4 +1,4 @@
-package io.github.molishadaze.weijing.ui.screens
+package io.github.molishadaze.weijing.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

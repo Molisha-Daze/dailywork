@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
+import io.github.molishadaze.weijing.ui.components.HabitManageSection
 import io.github.molishadaze.weijing.ui.components.UiIcons
 import io.github.molishadaze.weijing.ui.theme.AppTheme
 import io.github.molishadaze.weijing.util.AppSettings

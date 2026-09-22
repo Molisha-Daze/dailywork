@@ -95,12 +95,8 @@ fun HabitCard(
         MaterialTheme.colorScheme.primary
     }
 
-    // 完成态走「主题主色」而不是某一支固定绿。
-    //
-    // 原来是写死的 #10B981，而它同时是主题主色、也是习惯色板的第一支 —— 于是
-    // 「这张卡已完成」和「这个习惯恰好是翡翠绿」长得一模一样，换主题后还会撞色。
-    // 现在完成态 = 当前主题主色，而所有主题的主色都是低饱和中性色，
-    // 与习惯 / 计数器那批高饱和彩色天然拉得开（ΔE > 30，见 AppThemeTest）。
+    // 完成态走「主题主色」而不是某一支固定绿 ——
+    // 完整原因见 AppTheme.kt 顶部的「设计硬约束」注释块（ΔE 由 AppThemeTest 守着）。
     val doneTint = MaterialTheme.colorScheme.primary
 
     // ⚠️ 底色必须是「合成后不透明」的。网页版 bg-emerald-500/5 在 CSS 里半透明没问题，

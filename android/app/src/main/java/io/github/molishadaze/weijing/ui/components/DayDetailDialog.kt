@@ -59,8 +59,7 @@ import java.time.format.DateTimeFormatter
 private val DETAIL_PURPLE = Color(0xFF8B5CF6)
 
 /**
- * 「完成」的强调色，取当前主题主色（理由同 CalendarMonthView.calAccent：
- * 写死的 #10B981 与计划色板第一支同值，会和「某个计划恰好是翡翠绿」混淆）。
+ * 「完成」的强调色，取当前主题主色 —— 原因见 AppTheme.kt 顶部的「设计硬约束」注释块。
  */
 @Composable
 private fun detailAccent(): Color = MaterialTheme.colorScheme.primary

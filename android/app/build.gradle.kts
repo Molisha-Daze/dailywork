@@ -40,8 +40,8 @@ android {
         // ⚠️ 不要用「与 versionName 末段对齐」的老写法：那样 1.0.1 和 1.1 都会算成 11，直接撞车。
         // 只改 versionName 不改 versionCode 等于没发新版 —— 两者必须同时改。
         // 另外不少国产启动器按 versionCode 缓存桌面图标，涨号也是图标能刷新的前提。
-        versionCode = 10201
-        versionName = "1.2.1"
+        versionCode = 10203
+        versionName = "1.2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

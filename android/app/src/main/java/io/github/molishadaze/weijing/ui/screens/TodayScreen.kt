@@ -96,9 +96,8 @@ fun TodayScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
-                // 主行动按钮一律用「主题主色 + onPrimary」，不再写死翡翠绿：
-                // #10B981 同时是计划色板的第一支，写死它既会和主题打架，
-                // 也会让人分不清这是 App 的按钮还是某个翡翠绿计划。
+                // 主行动按钮一律用「主题主色 + onPrimary」，不写死翡翠绿 ——
+                // 原因见 AppTheme.kt 顶部的「设计硬约束」注释块。
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(16.dp)
