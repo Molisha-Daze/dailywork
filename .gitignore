@@ -47,3 +47,16 @@ keystore.properties
 
 # 图标抓取与对照生成的临时工作区（HabitIcons.kt 已自带全部路径数据，可随时重建）
 .iconwork/
+
+# ===== AI 助手工作区：绝不允许进仓库 =====
+# .workbuddy/ 是本机的工作目录，对「构建 App」毫无用处，但会暴露本机环境信息：
+#   memory/   —— 工作日志与项目约定，正文里含本机绝对路径（C:\Users\...、E:\...）
+#   tmp/      —— 临时 diff、调试截图、构建日志、一次性脚本
+#   commitmsg.txt / last.txt —— 提交信息草稿
+# 历史教训：2026-09-19 起曾误提交 21 个文件到公开仓库，2026-09-23 已从索引移除。
+# 注意：本规则只拦「未跟踪」文件；已跟踪过的必须 git rm --cached 才脱离。
+.workbuddy/
+
+# 音效预览目录：与 app/src/main/res/raw/ 逐字节重复（cmp 验过 9/9 相同）。
+# 音效唯一真源是 res/raw/，此目录只是早期生成的副本，不再纳入版本管理。
+android/sfx-preview/
