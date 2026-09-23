@@ -35,11 +35,12 @@
 ## 应用内自更新（细节见技能 `android-app-self-update`）
 
 - **Gitee 主 + GitHub 备**，并行查、取 versionCode 大者。常量在 `data/AppUpdateSource.kt` 顶部：
-  `GITEE_REPO`（**留空=不启用**）、`GITHUB_REPO`。账号 `weijingzhishi`，已填 `weijingzhishi/weijing`。
-  ⚠️ 仓库要**实名**且**必须公开**（私有仓库附件匿名拿不到 → 必静默失败）。
+  `GITEE_REPO = "weijingzhishi/weijing"`、`GITHUB_REPO = "Molisha-Daze/dailywork"`。
+  🚨 两处都要**实名**且**必须公开**（私有仓库附件匿名拿不到 → 必静默失败）。
 - 🚨 网络实测：`api.github.com` ✅、`release-assets.githubusercontent.com` ✅，但 **`github.com` ❌**。
   → GitHub 下载禁用 `browser_download_url`，必须走 `api.github.com/.../assets/{id}` +
-  `Accept: application/octet-stream`。GitHub 备源**至今没发过版**（双源实际只有一源）。
+  `Accept: application/octet-stream`。🔴 **GitHub 备源至今 0 条 release**（`/releases` 返回空数组）
+  → 双源实际只有 Gitee 一源在工作。
   ⚠️ 本机 hosts 有 2886 行 GitHub520，**必须 `curl --resolve` 才算数**。
 - 🚨 **Gitee 匿名 API 会限流**（打爆后本机 IP 全线 403，冷却很久；响应是**纯文本**非 JSON）；
   **但附件下载直链不受限**（→ `foruda.gitee.com` 200）。排查期响应先落盘再离线解析，别反复刷。
@@ -54,6 +55,28 @@
   （管理中心 → 关于 → 检查更新）才报「更新未完成」。
 - ✅ 2026-09-22 实机走通全流程（10399 → 10400：发现新版 → 下载 21.7MB → 权限引导 → 调起安装器 → 成功）。
 - ⚠️ 欠账：更新日志弹窗原样显示 Markdown（`##`/`**` 没渲染）。
+
+## 仓库 / 文档
+
+- **GitHub 仓库 = `Molisha-Daze/dailywork`**（= `AppUpdateSource.GITHUB_REPO`，push 可达）。
+  🚨 仓库根已有 `README.md`（`abce663`）+ `docs/screenshots*.png`；**不要**再写一份重复的。
+- 🔥 **README 语气要客气、平实**（用户对「装逼感」敏感），开头需体现「**纯自用**」+「**纯 AI 生成**」。
+  🔥 **只写功能**，不写取舍/联网说明/自更新/发版/目录结构 —— 那些属于源码注释与 `android/README.md`。
+  面向使用者的文档不要堆架构与运维内容，且**废话要少**（用户已就此提过两轮）。
+- 🔥 **截图必须是手机竖屏比例**。MuMu 默认 tablet.1 / 1920×1080 是横屏，截出来很难看；
+  改 `resolution_mode=custom` + 1080×1920 后 **physical density 会掉到 10**，
+  必须 `adb shell wm density 440` 覆盖，否则界面挤成一团、字变点阵。改完要重启实例。
+  用完复原：`wm density reset` + `resolution_mode` 回 `tablet.1`。竖屏 tab 坐标 y≈1854。
+- 🚨 本机能 `git push`（Windows 凭据管理器有条目），但**该凭据不给 API 写权限**
+  （`PATCH /repos/…` → 401）。改 description / topics / homepage **只能用户手动在网页做**。
+- ⚠️ `gh` CLI **未安装**；`android/.gitee-token` 是 Gitee 的，对 GitHub 无效。
+- 文档类改动：`README.md`（项目介绍）/ `android/README.md`（深度技术说明，含签名与发版细节）；
+  `android/gen_preview.py` 拼截图（需 `…/python/envs/default/Scripts/python.exe`，系统 python 无 PIL）。
+- 历史大文件（**评估为可删，待用户确认**）：`P3执行与发版-20260922.md`、`P0-P1执行验收-20260921.md`、
+  `优化评估-未竟-20260921.md`、`优化评估-可行性核验-20260921.md`、`音效方案-未竟-20260922.md`。
+  ⚠️ 后者的 **§10 实施记录**（DAY_DONE 改为 `completesDay` 透传）与
+  `优化评估-未竟` 里的 **P2 待办**（`SettingsScreen.kt` 仍有 `Color(0xFF10B981)`）是未落地项，删前要摘出。
+  `.iconwork/` 是图标/截图工作区（gitignore；竖屏截图在 `shots-portrait/`）。
 
 ## 图标（`ui/components/HabitIcons.kt` 唯一来源）
 
