@@ -234,4 +234,48 @@ class HabitScheduleTest {
         assertFalse(HabitSchedule.isOneShot(daily(start = "2026-09-22", end = "2026-09-01")))
         assertFalse(HabitSchedule.isOneShot(weekly("", "2026-09-21").copy(endDate = "2026-09-23")))
     }
+
+    // ---------- 往期/已完结日程判定（isFinished）----------
+
+    @Test
+    fun 常规进行中循环习惯永不判定为已完结() {
+        val today = d("2026-09-22")
+        assertFalse(HabitSchedule.isFinished(daily(), today, totalCheckIns = 0))
+        assertFalse(HabitSchedule.isFinished(daily(), today, totalCheckIns = 100))
+        assertFalse(HabitSchedule.isFinished(weekly("1,3,5"), today, totalCheckIns = 50))
+    }
+
+    @Test
+    fun 结束日期在过去则判定为已完结() {
+        val today = d("2026-09-22")
+        val expired = daily(start = "2026-09-01", end = "2026-09-15")
+        assertTrue(HabitSchedule.isFinished(expired, today, totalCheckIns = 15))
+        assertTrue(HabitSchedule.isFinished(expired, today, totalCheckIns = 0))
+
+        val notExpired = daily(start = "2026-09-01", end = "2026-09-30")
+        assertFalse(HabitSchedule.isFinished(notExpired, today, totalCheckIns = 10))
+    }
+
+    @Test
+    fun 过去的单次日程判定为已完结() {
+        val today = d("2026-09-22")
+        val pastSingle = single("2026-09-15")
+        assertTrue(HabitSchedule.isFinished(pastSingle, today, totalCheckIns = 1))
+        assertTrue(HabitSchedule.isFinished(pastSingle, today, totalCheckIns = 0))
+    }
+
+    @Test
+    fun 未来的单次日程判定为进行中() {
+        val today = d("2026-09-22")
+        val futureSingle = single("2026-09-28")
+        assertFalse(HabitSchedule.isFinished(futureSingle, today, totalCheckIns = 0))
+    }
+
+    @Test
+    fun 今天的单次日程按是否打卡区分() {
+        val today = d("2026-09-22")
+        val todaySingle = single("2026-09-22")
+        assertFalse("今天尚未打卡，处于进行中", HabitSchedule.isFinished(todaySingle, today, totalCheckIns = 0))
+        assertTrue("今天已打卡完成，处于已完结", HabitSchedule.isFinished(todaySingle, today, totalCheckIns = 1))
+    }
 }

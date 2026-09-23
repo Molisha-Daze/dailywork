@@ -164,6 +164,32 @@ object HabitSchedule {
 
     fun formatMonthlyDays(days: Set<Int>): String? =
         if (days.isEmpty()) null else days.sorted().joinToString(",")
+
+    /**
+     * 判定该习惯/日程是否已结束或往期已完成：
+     *
+     * 1. 明确已到期：有 endDate 且 endDate < todayStr
+     * 2. 一次性任务（包含显式单次与区间内仅一天的伪循环）：
+     *    - 排期日期在过去（无论是否打卡，该日程已过去）
+     *    - 已打过卡（totalCheckIns > 0，该单次任务已完成）
+     * 3. 显式单次任务（TYPE_NONE）且排期在过去
+     */
+    fun isFinished(habit: Habit, todayDate: LocalDate, totalCheckIns: Int): Boolean {
+        val todayStr = todayDate.toString()
+        val end = habit.endDate?.takeIf { it.isNotBlank() }
+        if (end != null && end < todayStr) return true
+
+        if (isOneShot(habit)) {
+            if (habit.startDate.isNotBlank() && habit.startDate < todayStr) return true
+            if (totalCheckIns > 0) return true
+        }
+
+        if (habit.recurrenceType == TYPE_NONE && habit.startDate.isNotBlank() && habit.startDate < todayStr) {
+            return true
+        }
+
+        return false
+    }
 }
 
 /**

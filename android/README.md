@@ -98,7 +98,7 @@
 |---|---|---|
 | `applicationId` | `io.github.molishadaze.weijing` | 系统眼中的安装身份。**改它 = 换一个新 App**，老用户数据不跟随 |
 | `namespace` | 同上 | Java 包名 / 源码目录结构 |
-| `versionCode` / `versionName` | `10400` / `1.4.0` | versionCode 必须单调递增，否则老用户装不上新版。编码规则 `major*10000 + minor*100 + patch`，**不要**用「与 versionName 末段对齐」的写法（1.0.1 与 1.1 会撞成同一个数）。只改 versionName 不改 versionCode = 没发新版 |
+| `versionCode` / `versionName` | `10401` / `1.4.1` | versionCode 必须单调递增，否则老用户装不上新版。编码规则 `major*10000 + minor*100 + patch`，**不要**用「与 versionName 末段对齐」的写法（1.0.1 与 1.1 会撞成同一个数）。只改 versionName 不改 versionCode = 没发新版 |
 
 > ⚠️ 本版本同时换了 **签名证书**（debug → 正式）和 **包名**，因此：
 > 装过旧版的人必须**卸载重装**，数据不会自动迁移 —— 请先让他们在「管理中心 → 数据备份」导出备份。

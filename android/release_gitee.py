@@ -118,8 +118,13 @@ def http(method, path, token, query=None, json_body=None, multipart=None):
         return status, raw
 
 
-def build_multipart(fields, file_field, file_path, mime):
-    """手搓 multipart —— 标准库没有现成的，而这是唯一需要它的地方。"""
+def build_multipart(fields, file_field, file_path, mime, upload_name=None):
+    """手搓 multipart —— 标准库没有现成的，而这是唯一需要它的地方。
+
+    🚨 [upload_name] 必须显式给：附件名取的是**本地构建产物**的文件名（`app-release.apk`），
+    直接用它会让「已存在则跳过」的判断（按 `weijing-<版本>.apk` 匹配）永远匹配不上，
+    重跑一次就多传一份 —— 慢慢把 Gitee 的 1GB 附件额度撑满。
+    """
     boundary = "----WeijingReleaseBoundary" + uuid.uuid4().hex
     buf = bytearray()
     for k, v in fields.items():
@@ -127,7 +132,7 @@ def build_multipart(fields, file_field, file_path, mime):
         buf += ('Content-Disposition: form-data; name="%s"\r\n\r\n' % k).encode()
         buf += str(v).encode("utf-8") + b"\r\n"
 
-    filename = os.path.basename(file_path)
+    filename = upload_name or os.path.basename(file_path)
     buf += ("--%s\r\n" % boundary).encode()
     buf += ('Content-Disposition: form-data; name="%s"; filename="%s"\r\n'
             % (file_field, filename)).encode("utf-8")
@@ -242,12 +247,27 @@ def find_by_tag(releases, tag):
     return None
 
 
-def create_release(repo, tag, title, notes, token):
+def repo_default_branch(repo, token):
+    """取仓库的默认分支。
+
+    🚨 不能写死 `master`：Gitee 新建仓库默认是 `main`，而发行版的 tag 是打在
+    `target_commitish` 上的 —— 写错会直接导致「建 tag 失败」，
+    报错却只说 tag 有问题，很容易往别处查。
+    """
+    st, data = http("GET", "/repos/%s" % repo, token)
+    if st == 200 and isinstance(data, dict):
+        branch = (data.get("default_branch") or "").strip()
+        if branch:
+            return branch
+    return "main"
+
+
+def create_release(repo, tag, title, notes, token, branch):
     body = {
         "tag_name": tag,
         "name": title,
         "body": notes,
-        "target_commitish": "master",
+        "target_commitish": branch,
         "prerelease": False,
     }
     # Gitee 对 POST 的编码方式在不同版本上表现不一致：先按 JSON 发，
@@ -257,7 +277,7 @@ def create_release(repo, tag, title, notes, token):
         first = scrub(data)
         st2, data2 = http("POST", "/repos/%s/releases" % repo, token,
                           query={"tag_name": tag, "name": title, "body": notes,
-                                 "target_commitish": "master", "prerelease": "false"})
+                                 "target_commitish": branch, "prerelease": "false"})
         if not (200 <= st2 < 300):
             die("创建发行版失败。\n    JSON 方式 HTTP %s：%s\n    表单方式 HTTP %s：%s"
                 % (st, first, st2, scrub(data2)))
@@ -268,10 +288,12 @@ def create_release(repo, tag, title, notes, token):
     return data
 
 
-def upload_attachment(repo, release_id, tag, apk_path, token):
+def upload_attachment(repo, release_id, tag, apk_path, upload_name, token):
     fields = {"owner": repo.split("/")[0], "repo": repo.split("/")[1],
               "release_id": str(release_id)}
-    mp = build_multipart(fields, "file", apk_path, "application/vnd.android.package-archive")
+    mp = build_multipart(fields, "file", apk_path,
+                         "application/vnd.android.package-archive",
+                         upload_name=upload_name)
     st, data = http("POST", "/repos/%s/releases/%s/attach_files" % (repo, release_id),
                     token, multipart=mp)
     if not (200 <= st < 300):
@@ -338,7 +360,9 @@ def main():
         if notes is None:
             notes = "本次更新内容待补充。\n\n（发版时可加 --notes \"...\" 填写，它会原样显示在 App 的更新弹窗里。）"
         title = args.title or ("未竟 v" + name)
-        release = create_release(repo, tag, title, notes, token)
+        branch = repo_default_branch(repo, token)
+        info("默认分支   %s" % branch)
+        release = create_release(repo, tag, title, notes, token, branch)
         ok("已创建发行版 %s（id=%s）" % (tag, release.get("id")))
 
     release_id = release.get("id")
@@ -346,11 +370,18 @@ def main():
     # --- 2. 附件 ---
     apk_name = "weijing-%s.apk" % name
     atts = list_attachments(repo, release_id, token)
-    already = [a for a in atts if (a.get("name") or "") == apk_name]
+    apk_atts = [a for a in atts if (a.get("name") or "").lower().endswith(".apk")]
+    already = [a for a in apk_atts if (a.get("name") or "") == apk_name]
     if already:
         info("附件 %s 已存在（id=%s），跳过上传" % (apk_name, already[0].get("id")))
     else:
-        upload_attachment(repo, release_id, tag, APK, token)
+        # 除了预期名之外的 APK 附件一律先提醒：多半是历史遗留的重复包，
+        # 留着既占额度，App 选包时也可能选到它。
+        for a in apk_atts:
+            info("⚠️ 这条发行版上已存在另一个 APK 附件：%s（id=%s）"
+                 % (a.get("name"), a.get("id")))
+            info("   它不是本脚本的命名规范，确认无用就去网页删掉，别让它一直占额度")
+        upload_attachment(repo, release_id, tag, APK, apk_name, token)
         ok("已上传附件 %s" % apk_name)
 
     # --- 3. 回读校验（这一步才是真正证明「App 能拿到」）---

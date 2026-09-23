@@ -92,6 +92,14 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
             initialValue = emptyList()
         )
 
+    /** 全部已归档习惯，供「习惯管理」折叠查看使用。 */
+    val archivedHabits: StateFlow<List<Habit>> = repository.allArchivedHabits
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     val allCheckIns: StateFlow<List<CheckIn>> = repository.allCheckIns
         .stateIn(
             scope = viewModelScope,
@@ -188,6 +196,24 @@ class HabitViewModel(private val repository: HabitRepository) : ViewModel() {
     fun deleteHabit(habit: Habit) {
         viewModelScope.launch {
             repository.deleteHabit(habit)
+        }
+    }
+
+    fun archiveHabit(habit: Habit) {
+        viewModelScope.launch {
+            repository.archiveHabit(habit)
+        }
+    }
+
+    fun unarchiveHabit(habit: Habit) {
+        viewModelScope.launch {
+            repository.unarchiveHabit(habit)
+        }
+    }
+
+    fun archiveFinishedHabits(habits: List<Habit>) {
+        viewModelScope.launch {
+            repository.archiveHabits(habits)
         }
     }
 

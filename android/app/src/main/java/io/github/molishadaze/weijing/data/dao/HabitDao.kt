@@ -14,6 +14,15 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE archived = 0 ORDER BY sortOrder ASC, id ASC")
     fun getAllActiveHabits(): Flow<List<Habit>>
 
+    @Query("SELECT * FROM habits WHERE archived = 1 ORDER BY sortOrder ASC, id ASC")
+    fun getAllArchivedHabits(): Flow<List<Habit>>
+
+    @Query("UPDATE habits SET archived = 1 WHERE id = :id")
+    suspend fun archiveHabit(id: Long)
+
+    @Query("UPDATE habits SET archived = 0 WHERE id = :id")
+    suspend fun unarchiveHabit(id: Long)
+
     @Query("SELECT * FROM habits WHERE archived = 0 ORDER BY sortOrder ASC, id ASC")
     suspend fun getAllActiveHabitsList(): List<Habit>
 

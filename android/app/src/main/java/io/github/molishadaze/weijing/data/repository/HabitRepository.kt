@@ -57,6 +57,9 @@ class HabitRepository(private val context: Context) {
 
     val allHabits: Flow<List<Habit>> = habitDao.getAllActiveHabits()
 
+    /** 全部已归档习惯，按排序与创建时间排列。 */
+    val allArchivedHabits: Flow<List<Habit>> = habitDao.getAllArchivedHabits()
+
     val allCheckIns: Flow<List<CheckIn>> = checkInDao.getAllCheckIns()
 
     val allCheckInsWithHabits: Flow<List<CheckInWithHabit>> = checkInDao.getAllCheckInsWithHabit()
@@ -136,6 +139,31 @@ class HabitRepository(private val context: Context) {
             ImageStorageManager.deleteImageFile(c.photoPath)
         }
         habitDao.delete(habit)
+    }
+
+    /**
+     * 归档习惯。
+     *
+     * 关键差异：**不删除打卡记录、不删除照片**，历史月历与流水完全保留；
+     * 仅撤销该习惯的定时提醒与未消费通知，并将 archived 置为 true，使其从主管理清单与今日清单中隐藏。
+     */
+    suspend fun archiveHabit(habit: Habit) {
+        NotificationHelper.cancelReminder(context, habit.id)
+        NotificationHelper.cancelNotification(context, habit.id)
+        habitDao.archiveHabit(habit.id)
+    }
+
+    /** 恢复已归档习惯。 */
+    suspend fun unarchiveHabit(habit: Habit) {
+        habitDao.unarchiveHabit(habit.id)
+        if (habit.reminderTime != null) {
+            NotificationHelper.scheduleDailyReminder(context, habit.copy(archived = false))
+        }
+    }
+
+    /** 批量归档习惯。 */
+    suspend fun archiveHabits(habits: List<Habit>) {
+        habits.forEach { archiveHabit(it) }
     }
 
     suspend fun updateHabitOrder(habits: List<Habit>) {

@@ -7,6 +7,11 @@ coverage/
 .env*
 !.env.example
 
+# Python 字节码缓存：android/ 下的 gen_icons.py / gen_sfx.py / release_gitee.py
+# 一被 import 或编译就会生成，是纯产物，不该进版本库。
+__pycache__/
+*.pyc
+
 # Gradle / Android 构建产物与缓存
 # android/.gradle 是机器与 Gradle 版本相关的缓存（checksums、dependencies-accessors、
 # .lock、.bin、.class、自动生成的 Java 源码），不同环境会持续改动，绝不能进仓库。
