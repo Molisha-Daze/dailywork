@@ -100,8 +100,14 @@ object AppUpdateSource {
      */
     private const val GITEE_REPO = "weijingzhishi/weijing"
 
-    /** GitHub 仓库路径 `用户名/仓库名`。 */
-    private const val GITHUB_REPO = "Molisha-Daze/dailywork"
+    /**
+     * GitHub 仓库路径 `用户名/仓库名`。
+     *
+     * ⚠️ 仓库 2026-09-23 从 `dailywork` 更名为 `weijing`。写旧名时 GitHub 会 301/307
+     * 重定向到新名，短期看不出问题 —— 但重定向不是承诺，一旦哪天不生效，
+     * 备源会**静默失效**（用户只看到「已是最新」，没有任何报错）。所以直接用新名。
+     */
+    private const val GITHUB_REPO = "Molisha-Daze/weijing"
 
     private const val CONNECT_TIMEOUT_MS = 5_000
     private const val READ_TIMEOUT_MS = 8_000

@@ -119,8 +119,11 @@
 
 ```
 GITEE_REPO  = "weijingzhishi/weijing"     // 留空 = 不启用 Gitee，只用 GitHub
-GITHUB_REPO = "Molisha-Daze/dailywork"
+GITHUB_REPO = "Molisha-Daze/weijing"      // ⚠️ 仓库 2026-09-23 由 dailywork 更名而来
 ```
+
+> 🚨 **仓库名写旧名是能跑通的**（GitHub 会 307 重定向），但重定向不是承诺。
+> 一旦失效，备源会**静默失败** —— 所以改完名记得同步这两个常量。
 
 > 🚨 **Gitee 仓库必须是公开的。** 私有仓库的发行版附件匿名拿不到，自更新会 100% 失败 ——
 > 而且失败是静默的：用户只会看到「已是最新」，没有任何报错可查。
